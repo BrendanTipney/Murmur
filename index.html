@@ -1,0 +1,63 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no">
+<meta name="theme-color" content="#050506">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Murmur">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="apple-touch-icon" href="icons/icon-180.png">
+<link rel="icon" href="icons/icon.svg" type="image/svg+xml">
+<link rel="stylesheet" href="style.css">
+<title>Murmur</title>
+</head>
+<body>
+<header id="top">
+  <div class="brand">murmur</div>
+  <div class="today" id="today"></div>
+  <button id="menuBtn" class="icon-btn" aria-label="Menu">
+    <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="5" cy="12" r="1.6"/><circle cx="12" cy="12" r="1.6"/><circle cx="19" cy="12" r="1.6"/></svg>
+  </button>
+</header>
+
+<main id="col"></main>
+
+<canvas id="fx" aria-hidden="true"></canvas>
+
+<div id="scrim" class="scrim"></div>
+
+<section id="editSheet" class="sheet" aria-hidden="true">
+  <div class="grab"></div>
+  <form id="habitForm" autocomplete="off">
+    <h2 id="sheetTitle">New habit</h2>
+    <label class="field-row"><span>Habit</span><input id="fName" maxlength="40" placeholder="Read ten pages" required></label>
+    <label class="field-row"><span>Trigger</span><input id="fTrig" maxlength="60" placeholder="After I pour my coffee"></label>
+    <label class="field-row"><span>Goal</span><input id="fGoal" maxlength="80" placeholder="Finish a book a month"></label>
+    <div class="actions">
+      <button type="button" id="delBtn" class="btn ghost danger">Delete</button>
+      <button type="submit" class="btn primary">Save</button>
+    </div>
+  </form>
+</section>
+
+<section id="menuSheet" class="sheet" aria-hidden="true">
+  <div class="grab"></div>
+  <h2>Murmur</h2>
+  <p class="note">Tap a hexagon each day you keep a habit. Keep it going for 27 days and the pattern fills its lane.</p>
+  <div class="menu-list">
+    <button type="button" class="btn ghost" id="soundBtn">Sound: on</button>
+    <button type="button" class="btn ghost" id="exportBtn">Export backup</button>
+    <button type="button" class="btn ghost" id="importBtn">Import backup</button>
+    <input type="file" id="importFile" accept="application/json,.json" hidden>
+  </div>
+</section>
+
+<!-- iOS 18+ gives a haptic tick when a switch input is toggled -->
+<label id="haptic" class="haptic" aria-hidden="true"><input type="checkbox" switch tabindex="-1"></label>
+
+<script type="module" src="app.js"></script>
+</body>
+</html>
