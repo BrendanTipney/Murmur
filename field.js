@@ -40,19 +40,26 @@ void main() {
   for (int i = 0; i < 4; i++) {
     float r = uRipR[i];
     if (r >= 0.0) {
-      float b = (distance(p, uRipO[i]) - r) / 2.5;
+      float d = distance(p, uRipO[i]) - r;
+      // sharp leading edge, longer trailing wake
+      float b = d / (d > 0.0 ? 2.5 : 6.0);
       float band = exp(-b * b) * uRipA[i];
       feed += max(band, 0.0);
       starve += max(-band, 0.0);
     }
   }
-  feed *= 1.0 - outside;
+  feed = min(feed, 1.5) * (1.0 - outside);
+  starve = min(starve, 1.5);
 
-  // the passing front lowers the kill rate a touch: spots swell, stripes surge
-  float k = uK + outside * 0.07 - feed * 0.006 + starve * 0.01;
+  // Inside the front the diffusion rates diverge further (V slows right down
+  // relative to U), sharpening the Turing instability: spots bud and split,
+  // stripes wrinkle and branch. Feed/kill tilt toward growth at the same time.
+  float Fr = uF + feed * 0.010;
+  float k = uK + outside * 0.07 - feed * 0.006 + starve * 0.005;
+  float Dv = 0.5 - feed * 0.28;
   float uvv = u * v * v;
-  float du = lap.x - uvv + uF * (1.0 - u);
-  float dv = 0.5 * lap.y + uvv - (uF + k) * v;
+  float du = lap.x - uvv + Fr * (1.0 - u);
+  float dv = Dv * lap.y + uvv - (Fr + k) * v;
 
   // sparse seed points in the front, so bare ground can sprout
   vec2 cell = floor(p / 3.0);
@@ -88,13 +95,14 @@ void main() {
   float gx = texture(uS, su + vec2(uTexel.x, 0.0)).g - texture(uS, su - vec2(uTexel.x, 0.0)).g;
   float gy = texture(uS, su + vec2(0.0, uTexel.y)).g - texture(uS, su - vec2(0.0, uTexel.y)).g;
   gx *= 1.0 - 2.0 * uMirror;
-  vec3 n = normalize(vec3(-gx * 5.0, -gy * 5.0, 1.0));
+  float act = s.b;
+  // active regions read as a swelling surface: steeper normals, stronger sheen
+  vec3 n = normalize(vec3(-gx * 5.0 * (1.0 + 2.0 * act), -gy * 5.0 * (1.0 + 2.0 * act), 1.0));
 
   float ink = smoothstep(0.11, 0.27, v);
-  float act = s.b;
 
-  // thin-film hue: shifts with surface slope, position and time
-  float h = dot(n.xy, vec2(0.6, 0.4)) + vUv.x * 0.3 + vUv.y * 0.1 + uTime * 0.035 + uPhase;
+  // thin-film hue: shifts with surface slope, position, time and activity
+  float h = dot(n.xy, vec2(0.6, 0.4)) + vUv.x * 0.3 + vUv.y * 0.1 + uTime * 0.035 + uPhase + act * 0.5;
   vec3 film = iri(h);
   vec3 L = normalize(vec3(cos(uTime * 0.25) * 0.6, 0.5, 0.75));
   float diff = clamp(dot(n, L), 0.0, 1.0);
@@ -112,8 +120,8 @@ void main() {
 
   // the wave: activity tints the pearl and glows softly in the dark
   vec3 glow = iri(h + 0.5 + act * 0.4);
-  col = mix(col, col * (0.55 + 0.7 * glow), act * ink * 0.9);
-  col += glow * act * 0.35 * (1.0 - ink);
+  col = mix(col, col * (0.45 + 0.9 * glow), min(1.0, act * 1.2) * ink);
+  col += glow * act * 0.5 * (1.0 - ink);
 
   // panel shape: square under the hex, rounded at the far end
   vec2 px = vec2(sx * uPx.x, vUv.y * uPx.y);
@@ -135,7 +143,7 @@ const PRESETS = [
   { F: 0.06, k: 0.062 },    // worms
 ];
 const SIM_SCALE = 0.85;     // sim cells per CSS pixel
-const RIPPLE_SPEED = 0.38;  // cells per step
+const RIPPLE_SPEED = 0.3;   // cells per step
 
 function hash(str) {
   let h = 2166136261;
@@ -270,6 +278,7 @@ export class FieldSystem {
     f.dpr = dpr;
     f.mirror = o.mirror;
     f.radius = o.radius;
+    f.originY = o.originY ?? 0.5;
     f.visible = true;
     canvas.__field = f;
     this.io?.observe(canvas);
@@ -344,14 +353,14 @@ export class FieldSystem {
   ripple(id, amp, at) {
     const f = this.fields.get(id);
     if (!f || !f.sw) return;
-    let ox = 0, oy = f.sh / 2;
+    let ox = 0, oy = f.sh * (1 - f.originY);
     if (at) {
       const w = f.pw / f.dpr, h = f.ph / f.dpr;
       const fx = at.x / w;
       ox = (f.mirror ? 1 - fx : fx) * f.sw;
       oy = (1 - at.y / h) * f.sh;
     }
-    const far = Math.hypot(Math.max(ox, f.sw - ox), Math.max(oy, f.sh - oy)) + 6;
+    const far = Math.hypot(Math.max(ox, f.sw - ox), Math.max(oy, f.sh - oy)) + 14;
     f.ripples.push({ r: 0, amp, ox, oy, max: at ? Math.min(far, 28) : far });
     if (f.ripples.length > 4) f.ripples.shift();
     f.busyUntil = this.time + 2.5;

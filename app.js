@@ -52,16 +52,21 @@ let rows = []; // [{h, row, info, hex, cv, fieldW, mirror}]
 
 function computeGeo() {
   const W = Math.min(window.innerWidth, 520);
-  const hexW = Math.round(Math.max(78, Math.min(108, W * 0.22)));
+  const hexW = Math.round(Math.max(80, Math.min(112, W * 0.23)));
   const hexH = hexW * 0.866;
-  const step = hexH * 0.86;       // rows interlock like a loose honeycomb
+  // Each hex sits flush against the one above along their slanted edges: start from
+  // true honeycomb adjacency, slide down the shared edge by SLIDE (0 = honeycomb,
+  // 1 = corner to corner), and keep a hairline GAP between the two edges.
+  const SLIDE = 0.68, GAP = 3;
+  const step = hexH * 0.5 * (1 + SLIDE) + GAP * 0.5;
   return {
     W, hexW, hexH, step,
-    off: hexW * 0.6,               // horizontal zig-zag between rows
-    ph: step - 5,                  // panel height
-    pad: 10,
+    off: hexW * (0.75 - 0.25 * SLIDE) + GAP * 0.866,
+    fieldH: step - 3,               // pattern: from this hex's top to the next hex's top
+    infoH: Math.round(hexH * 0.58), // details: a slimmer strip centred on the hex
+    pad: 6,
     top: 10,
-    radius: Math.min(14, (step - 5) / 2),
+    radius: 14,
   };
 }
 
@@ -69,10 +74,11 @@ function rowGeo(i) {
   const g = geo;
   const left = i % 2 === 0; // hex left of centre: details left, pattern right
   const cx = g.W / 2 + (left ? -g.off / 2 : g.off / 2);
-  const cy = g.top + i * g.step + g.hexH / 2;
+  const cy = g.top + g.hexH / 2 + i * g.step;
   return {
     left, cx, cy,
-    py: cy - g.ph / 2,
+    infoY: cy - g.infoH / 2,
+    fieldY: cy - g.hexH / 2,
     info: left ? { x: g.pad, w: cx - g.pad } : { x: cx, w: g.W - g.pad - cx },
     field: left ? { x: cx, w: g.W - g.pad - cx } : { x: g.pad, w: cx - g.pad },
   };
@@ -99,8 +105,8 @@ const ADD_HTML = `<span class="rim"></span><span class="core"></span>
 function makeInfo(r, cls) {
   const info = document.createElement('div');
   info.className = `info ${r.left ? 'L' : 'R'} ${cls || ''}`;
-  place(info, r.info.x, r.py, r.info.w, geo.ph);
-  info.style.setProperty('--r', geo.radius + 'px');
+  place(info, r.info.x, r.infoY, r.info.w, geo.infoH);
+  info.style.setProperty('--r', Math.min(12, geo.infoH / 2) + 'px');
   info.style.setProperty('--hexpad', geo.hexW / 2 + 8 + 'px');
   info.innerHTML = '<div class="name"></div><div class="trig"></div><div class="goal"></div>';
   return info;
@@ -128,7 +134,7 @@ function makeRow(h, i) {
 
   const cv = document.createElement('canvas');
   cv.className = 'field';
-  place(cv, r.field.x, r.py, r.field.w, geo.ph);
+  place(cv, r.field.x, r.fieldY, r.field.w, geo.fieldH);
 
   const hex = makeHex(r, HEX_HTML, h.name);
   row.append(cv, info, hex);
@@ -137,7 +143,11 @@ function makeRow(h, i) {
   const e = { h, row, info, hex, cv, fieldW: r.field.w, mirror: !r.left };
   const s = streakOf(h);
   if (fields.ok) {
-    fields.attach(h.id, cv, { w: r.field.w, h: geo.ph, mirror: !r.left, radius: geo.radius, extent: extentFor(s, r.field.w) });
+    fields.attach(h.id, cv, {
+      w: r.field.w, h: geo.fieldH, mirror: !r.left, radius: geo.radius,
+      originY: geo.hexH / 2 / geo.fieldH, // hex centre, as a fraction down the panel
+      extent: extentFor(s, r.field.w),
+    });
   } else {
     cv.classList.add('fallback');
     cv.classList.toggle('flip', !r.left);
@@ -412,3 +422,4 @@ build();
 
 const local = ['localhost', '127.0.0.1'].includes(location.hostname);
 if ('serviceWorker' in navigator && !local) navigator.serviceWorker.register('sw.js');
+if (local) window.__murmur = { fields }; // dev handle for poking the sims from the console

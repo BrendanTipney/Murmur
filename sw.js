@@ -1,5 +1,5 @@
 // Stale-while-revalidate: opens instantly offline, picks up updates on the next launch.
-const CACHE = 'murmur-v1';
+const CACHE = 'murmur-v2';
 const ASSETS = [
   './', 'index.html', 'style.css', 'app.js', 'field.js', 'fx.js', 'manifest.webmanifest',
   'icons/icon.svg', 'icons/icon-180.png', 'icons/icon-192.png', 'icons/icon-512.png',
