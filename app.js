@@ -52,18 +52,16 @@ let rows = []; // [{h, row, info, hex, cv, fieldW, mirror}]
 
 function computeGeo() {
   const W = Math.min(window.innerWidth, 520);
-  const hexW = Math.round(Math.max(80, Math.min(112, W * 0.23)));
-  const hexH = hexW * 0.866;
-  // Each hex sits flush against the one above along their slanted edges: start from
-  // true honeycomb adjacency, slide down the shared edge by SLIDE (0 = honeycomb,
-  // 1 = corner to corner), and keep a hairline GAP between the two edges.
-  const SLIDE = 0.68, GAP = 3;
-  const step = hexH * 0.5 * (1 + SLIDE) + GAP * 0.5;
+  const hexW = Math.round(Math.max(84, Math.min(116, W * 0.24)));
+  const hexH = hexW / 0.866;      // pointy-top hexes: the long axis is vertical
+  // True honeycomb: each row steps half a width across and three quarters of a
+  // height down, so neighbouring hexes share a whole slanted edge.
   return {
-    W, hexW, hexH, step,
-    off: hexW * (0.75 - 0.25 * SLIDE) + GAP * 0.866,
-    fieldH: step - 3,               // pattern: from this hex's top to the next hex's top
-    infoH: Math.round(hexH * 0.58), // details: a slimmer strip centred on the hex
+    W, hexW, hexH,
+    step: hexH * 0.75,
+    off: hexW * 0.5,
+    fieldH: hexH * 0.75 - 4,        // pattern lane, centred on its hex
+    infoH: Math.round(hexH * 0.55), // details: a slimmer strip, also centred
     pad: 6,
     top: 10,
     radius: 14,
@@ -78,7 +76,7 @@ function rowGeo(i) {
   return {
     left, cx, cy,
     infoY: cy - g.infoH / 2,
-    fieldY: cy - g.hexH / 2,
+    fieldY: cy - g.fieldH / 2,
     info: left ? { x: g.pad, w: cx - g.pad } : { x: cx, w: g.W - g.pad - cx },
     field: left ? { x: cx, w: g.W - g.pad - cx } : { x: g.pad, w: cx - g.pad },
   };
@@ -88,10 +86,17 @@ function place(el, x, y, w, h) {
   Object.assign(el.style, { left: x + 'px', top: y + 'px', width: w + 'px', height: h + 'px' });
 }
 
+const FIRST_DAY = 0.16; // day one is cheated forward so it clearly reads as progress
+
+// The first slice of every lane sits behind the hex, so it never counts as progress.
+const hiddenFor = (fieldW) => Math.min(0.5, (geo.hexW * 0.5 + 6) / fieldW);
+
 function extentFor(s, fieldW) {
+  if (s <= 0) return 0;  // nothing kept yet: bare lane
   if (s >= GOAL) return 1;
-  const e0 = Math.min(0.5, (geo.hexW * 0.5 + 8) / fieldW); // a bud just peeking past the hex
-  return e0 + (1 - e0) * (s / GOAL);
+  const hidden = hiddenFor(fieldW);
+  const t = FIRST_DAY + (1 - FIRST_DAY) * ((s - 1) / (GOAL - 1));
+  return hidden + (1 - hidden) * t;
 }
 
 // ---------- building ----------
@@ -145,7 +150,8 @@ function makeRow(h, i) {
   if (fields.ok) {
     fields.attach(h.id, cv, {
       w: r.field.w, h: geo.fieldH, mirror: !r.left, radius: geo.radius,
-      originY: geo.hexH / 2 / geo.fieldH, // hex centre, as a fraction down the panel
+      originY: 0.5, // the lane is centred on the hex
+      hidden: hiddenFor(r.field.w),
       extent: extentFor(s, r.field.w),
     });
   } else {

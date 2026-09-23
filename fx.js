@@ -22,7 +22,9 @@ function film(t, a) {
   return `rgba(${c(0)},${c(0.33)},${c(0.67)},${a})`;
 }
 
-function hexPath(x, y, r, rot = 0) {
+const POINTY = Math.PI / 2; // vertex at the top, like the hexes in the column
+
+function hexPath(x, y, r, rot = POINTY) {
   ctx.beginPath();
   for (let i = 0; i < 6; i++) {
     const a = rot + (i * Math.PI) / 3;
@@ -78,7 +80,7 @@ function tick(now) {
     ctx.lineWidth = 0.6 + (1 - t) * 4;
     for (let k = 0; k < 3; k++) {       // three offset rings = chromatic, iridescent edge
       ctx.strokeStyle = film(r.hue + k * 0.33 + t * 0.4, a);
-      hexPath(r.x, r.y, rad + k * 2.5 * (1 - t) + k, 0);
+      hexPath(r.x, r.y, rad + k * 2.5 * (1 - t) + k);
       ctx.stroke();
     }
   }

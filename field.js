@@ -19,6 +19,7 @@ uniform vec2 uTexel;
 uniform vec2 uSize;
 uniform float uF, uK;
 uniform float uExtent;    // 0..1 along x: how far the pattern may live
+uniform float uHidden;    // the stretch tucked behind the hex
 uniform vec4 uRipR;       // ripple radii in cells (<0 = inactive)
 uniform vec4 uRipA;       // ripple amplitudes (+ feeds V, - starves it)
 uniform vec2 uRipO[4];    // ripple origins in cells
@@ -32,7 +33,11 @@ void main() {
                + texture(uS, vUv + vec2(uTexel.x, -uTexel.y)).rg + texture(uS, vUv + vec2(-uTexel.x, uTexel.y)).rg);
 
   float u = c.r, v = c.g;
-  float outside = smoothstep(uExtent, uExtent + 0.03, vUv.x);
+  // The frontier is a ramp, not a wall: the kill rate climbs across the last
+  // stretch so the pattern thins out toward the leading edge.
+  // ...and once the lane is full the frontier firms up again
+  float ramp = clamp((uExtent - uHidden) * 0.3, 0.02, 0.1) * (1.0 - 0.85 * smoothstep(0.97, 1.0, uExtent));
+  float outside = smoothstep(uExtent - ramp, uExtent + 0.02, vUv.x);
 
   // Ripples perturb the chemistry itself; the reaction does the rest.
   vec2 p = vUv * uSize;
@@ -79,7 +84,7 @@ in vec2 vUv;
 out vec4 o;
 uniform sampler2D uS;
 uniform vec2 uTexel, uPx;
-uniform float uMirror, uTime, uExtent, uMaster, uPhase, uRadius, uDpr;
+uniform float uMirror, uTime, uExtent, uMaster, uPhase, uRadius, uDpr, uHidden;
 
 vec3 iri(float t) { return 0.5 + 0.5 * cos(6.28318 * (t + vec3(0.0, 0.33, 0.67))); }
 float sdBox(vec2 p, vec2 b, float r) {
@@ -99,7 +104,8 @@ void main() {
   // active regions read as a swelling surface: steeper normals, stronger sheen
   vec3 n = normalize(vec3(-gx * 5.0 * (1.0 + 2.0 * act), -gy * 5.0 * (1.0 + 2.0 * act), 1.0));
 
-  float ink = smoothstep(0.11, 0.27, v);
+  float fade = clamp((uExtent - uHidden) * 0.35, 0.03, 0.12) * (1.0 - 0.85 * uMaster);
+  float ink = smoothstep(0.11, 0.27, v) * smoothstep(uExtent + 0.02, uExtent - fade, sx);
 
   // thin-film hue: shifts with surface slope, position, time and activity
   float h = dot(n.xy, vec2(0.6, 0.4)) + vUv.x * 0.3 + vUv.y * 0.1 + uTime * 0.035 + uPhase + act * 0.5;
@@ -114,7 +120,7 @@ void main() {
   vec3 lit = mix(pearl, pearl * (0.5 + 0.65 * film), irAmt);
   lit += spec * 0.25 * (0.6 + 0.4 * film);
 
-  float reached = smoothstep(uExtent + 0.02, uExtent - 0.02, sx);
+  float reached = smoothstep(uExtent + 0.02, uExtent - fade, sx);
   vec3 bg = mix(vec3(0.035, 0.035, 0.04), vec3(0.058, 0.058, 0.066), reached);
   vec3 col = mix(bg, lit, ink);
 
@@ -279,6 +285,7 @@ export class FieldSystem {
     f.mirror = o.mirror;
     f.radius = o.radius;
     f.originY = o.originY ?? 0.5;
+    f.hidden = o.hidden ?? 0;
     f.visible = true;
     canvas.__field = f;
     this.io?.observe(canvas);
@@ -304,7 +311,8 @@ export class FieldSystem {
     const d = new Float32Array(sw * sh * 4);
     for (let i = 0; i < sw * sh; i++) d[i * 4] = 1;
     // Blocky noise over the reached region: ~25% of 4x4 blocks start "on".
-    const lim = Math.max(8, Math.floor(f.target * sw));
+    // A habit with no progress seeds nothing, so its lane stays bare.
+    const lim = f.target > 0 ? Math.max(8, Math.floor(f.target * sw)) : 0;
     const bw = Math.ceil(sw / 4);
     const blocks = Array.from({ length: bw * Math.ceil(sh / 4) }, () => r() < 0.25);
     for (let y = 0; y < sh; y++) for (let x = 0; x < lim; x++) {
@@ -375,6 +383,7 @@ export class FieldSystem {
     gl.uniform1f(u.uF, f.preset.F + 0.0005 * Math.sin(this.time * 0.23 + f.phase * 6.283));
     gl.uniform1f(u.uK, f.preset.k);
     gl.uniform1f(u.uExtent, f.extent);
+    gl.uniform1f(u.uHidden, f.hidden);
     gl.activeTexture(gl.TEXTURE0);
     gl.uniform1i(u.uS, 0);
     const R = this._R, A = this._A, O = this._O;
@@ -407,6 +416,7 @@ export class FieldSystem {
     gl.uniform1f(u.uTime, this.time);
     gl.uniform1f(u.uExtent, f.extent);
     gl.uniform1f(u.uMaster, f.master);
+    gl.uniform1f(u.uHidden, f.hidden);
     gl.uniform1f(u.uPhase, f.phase);
     gl.uniform1f(u.uRadius, f.radius);
     gl.uniform1f(u.uDpr, f.dpr);

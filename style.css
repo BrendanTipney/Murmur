@@ -11,7 +11,7 @@
   --text: #f1f1f2;
   --muted: #8e8e95;
   --faint: #5d5d64;
-  --hexclip: polygon(25% 0, 75% 0, 100% 50%, 75% 100%, 25% 100%, 0 50%);
+  --hexclip: polygon(50% 0, 100% 25%, 100% 75%, 50% 100%, 0 75%, 0 25%);
   --iri-soft: conic-gradient(from var(--a), #4b4b55, #b7c1d9, #dcc6ee, #bfe6da, #efefef, #8a90a2, #4b4b55);
   color-scheme: dark;
 }
@@ -187,9 +187,9 @@ button { font: inherit; color: inherit; }
 
 .hex .ck {
   left: 50%;
-  top: 44%;
-  width: 42%;
-  height: 42%;
+  top: 43%;
+  width: 46%;
+  height: 46%;
   transform: translate(-50%, -50%);
   fill: none;
   stroke-width: 2.4;
@@ -207,7 +207,7 @@ button { font: inherit; color: inherit; }
 .hex .count {
   left: 0;
   right: 0;
-  bottom: 13%;
+  bottom: 15%;
   text-align: center;
   font-size: 11px;
   font-weight: 600;
