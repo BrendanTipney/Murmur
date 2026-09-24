@@ -18,6 +18,9 @@
 
 * { box-sizing: border-box; }
 
+/* An author `display` rule beats the UA's [hidden] style, so make it stick. */
+[hidden] { display: none !important; }
+
 html, body {
   margin: 0;
   background: var(--bg);
@@ -337,7 +340,6 @@ button { font: inherit; color: inherit; }
 .btn.ghost:active { background: rgba(255, 255, 255, .05); }
 .btn.danger { color: #d98a8a; }
 .btn.danger.armed { background: #3a1616; border-color: #6a2a2a; color: #ffb4b4; }
-.btn[hidden] { display: none; }
 
 .menu-list { display: grid; gap: 10px; }
 
