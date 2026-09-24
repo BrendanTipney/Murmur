@@ -48,6 +48,14 @@
   <h2>Murmur</h2>
   <p class="note">Tap a hexagon each day you keep a habit. Keep it going for 27 days and the pattern fills its lane.</p>
   <div class="menu-list">
+    <div id="syncBlock" class="sync-block" hidden>
+      <div class="sync-status" id="syncStatus"></div>
+      <form id="syncForm" class="sync-form" autocomplete="off">
+        <input id="syncEmail" type="email" inputmode="email" autocomplete="email" placeholder="you@example.com" aria-label="Email for sign-in link">
+        <button type="submit" class="btn ghost">Email me a sign-in link</button>
+      </form>
+      <button type="button" class="btn ghost" id="signOutBtn" hidden>Sign out</button>
+    </div>
     <button type="button" class="btn ghost" id="soundBtn">Sound: on</button>
     <button type="button" class="btn ghost" id="exportBtn">Export backup</button>
     <button type="button" class="btn ghost" id="importBtn">Import backup</button>

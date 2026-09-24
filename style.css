@@ -340,6 +340,25 @@ button { font: inherit; color: inherit; }
 .btn[hidden] { display: none; }
 
 .menu-list { display: grid; gap: 10px; }
+
+.sync-block { display: grid; gap: 10px; padding-bottom: 12px; border-bottom: 1px solid var(--line); }
+.sync-status { font-size: 12.5px; color: var(--muted); line-height: 1.4; }
+.sync-form { display: grid; gap: 10px; }
+.sync-form input {
+  width: 100%;
+  font: inherit;
+  font-size: 16px;
+  color: var(--text);
+  background: #08080a;
+  border: 1px solid #25252b;
+  border-radius: 12px;
+  padding: 12px 14px;
+  outline: none;
+  -webkit-appearance: none;
+  appearance: none;
+}
+.sync-form input:focus { border-color: #5a5f70; }
+.sync-form input::placeholder { color: #45454c; }
 .menu-list .btn { text-align: left; font-weight: 500; }
 
 .haptic { position: fixed; left: -100px; top: 0; width: 1px; height: 1px; opacity: 0; overflow: hidden; }

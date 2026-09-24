@@ -1,5 +1,6 @@
 import { FieldSystem } from './field.js';
 import * as fx from './fx.js';
+import * as sync from './sync.js';
 
 const GOAL = 27;
 const KEY = 'murmur.v1';
@@ -7,10 +8,25 @@ const $ = (s) => document.querySelector(s);
 
 // ---------- storage ----------
 
+// Each habit keeps a log of { 'YYYY-MM-DD': { d: 1|0, t: <epoch ms> } }. Storing
+// un-ticks (d: 0) and a timestamp per day is what lets two devices merge, and
+// deleted habits stay as tombstones so the delete travels too.
+function migrate(s) {
+  for (const h of s.habits) {
+    if (!h.log) {
+      h.log = {};
+      for (const d of h.days || []) h.log[d] = { d: 1, t: 0 };
+    }
+    delete h.days;
+    h.updated = h.updated || 0;
+  }
+  return s;
+}
+
 function load() {
   try {
     const s = JSON.parse(localStorage.getItem(KEY));
-    if (s && Array.isArray(s.habits)) return { sound: true, ...s };
+    if (s && Array.isArray(s.habits)) return migrate({ sound: true, ...s });
   } catch {}
   return { habits: [], sound: true };
 }
@@ -19,6 +35,9 @@ function save() {
   try { localStorage.setItem(KEY, JSON.stringify(state)); } catch {}
 }
 navigator.storage?.persist?.();
+
+const live = () => state.habits.filter((h) => !h.deleted);
+const doneDays = (h) => Object.keys(h.log).filter((d) => h.log[d].d);
 
 const uid = () => (crypto.randomUUID ? crypto.randomUUID() : Date.now().toString(36) + Math.random().toString(36).slice(2));
 
@@ -34,14 +53,14 @@ function prevKey(k) {
 
 /** Consecutive days ending today, or yesterday if today isn't done yet. */
 function streakOf(h) {
-  const set = new Set(h.days);
+  const set = new Set(doneDays(h));
   let k = todayKey();
   if (!set.has(k)) k = prevKey(k);
   let n = 0;
   while (set.has(k)) { n++; k = prevKey(k); }
   return n;
 }
-const doneToday = (h) => h.days.includes(todayKey());
+const doneToday = (h) => !!h.log[todayKey()]?.d;
 
 // ---------- geometry ----------
 
@@ -174,7 +193,7 @@ function makeAddRow(i) {
   row.className = 'row';
   const info = makeInfo(r, 'add');
   info.querySelector('.name').textContent = 'New habit';
-  info.querySelector('.goal').textContent = state.habits.length ? '' : `Keep it for ${GOAL} days`;
+  info.querySelector('.goal').textContent = live().length ? '' : `Keep it for ${GOAL} days`;
   const hex = makeHex(r, ADD_HTML, 'Add a habit');
   hex.classList.add('add');
   row.append(info, hex);
@@ -188,11 +207,11 @@ function build() {
   geo = computeGeo();
   col.style.width = geo.W + 'px';
   col.replaceChildren();
-  rows = state.habits.map((h, i) => makeRow(h, i));
+  rows = live().map((h, i) => makeRow(h, i));
   makeAddRow(rows.length);
   const last = rowGeo(rows.length);
   col.style.height = last.cy + geo.hexH / 2 + 40 + 'px';
-  fields.prune(new Set(state.habits.map((h) => h.id)));
+  fields.prune(new Set(live().map((h) => h.id)));
   rows.forEach((e) => refresh(e, true));
   updateHeader();
 }
@@ -215,8 +234,8 @@ function refresh(e, immediate = false) {
 function updateHeader() {
   const d = new Date();
   const date = d.toLocaleDateString(undefined, { weekday: 'short', day: 'numeric', month: 'short' });
-  const n = state.habits.length;
-  const done = state.habits.filter(doneToday).length;
+  const n = live().length;
+  const done = live().filter(doneToday).length;
   $('#today').textContent = n ? `${date} · ${done}/${n}` : date;
 }
 
@@ -226,8 +245,9 @@ function onHex(e) {
   const { h, hex, info } = e;
   const t = todayKey();
   const was = doneToday(h);
-  h.days = was ? h.days.filter((d) => d !== t) : [...h.days, t];
+  h.log[t] = { d: was ? 0 : 1, t: Date.now() };
   save();
+  queueSync();
 
   const s = streakOf(h);
   const b = hex.getBoundingClientRect();
@@ -302,15 +322,16 @@ form.addEventListener('submit', (ev) => {
   ev.preventDefault();
   const name = fName.value.trim();
   if (!name) { fx.shake(fName); return; }
-  const data = { name, trigger: fTrig.value.trim(), goal: fGoal.value.trim() };
+  const data = { name, trigger: fTrig.value.trim(), goal: fGoal.value.trim(), updated: Date.now() };
   let newId = null;
   const existing = editingId && state.habits.find((h) => h.id === editingId);
   if (existing) Object.assign(existing, data);
   else {
     newId = uid();
-    state.habits.push({ id: newId, ...data, created: todayKey(), days: [] });
+    state.habits.push({ id: newId, ...data, created: todayKey(), log: {} });
   }
   save();
+  queueSync();
   closeSheet();
   build();
   if (newId) {
@@ -336,8 +357,11 @@ delBtn.addEventListener('click', () => {
     armTimer = setTimeout(disarm, 3000);
     return;
   }
-  state.habits = state.habits.filter((h) => h.id !== editingId);
+  // Tombstone rather than splice, so the delete reaches other devices.
+  const h = state.habits.find((x) => x.id === editingId);
+  if (h) { h.deleted = Date.now(); h.updated = Date.now(); }
   save();
+  queueSync();
   closeSheet();
   build();
 });
@@ -379,25 +403,108 @@ importFile.addEventListener('change', async () => {
   try {
     const s = JSON.parse(await f.text());
     if (!s || !Array.isArray(s.habits)) throw new Error('bad file');
+    const day = /^\d{4}-\d{2}-\d{2}$/;
     const habits = s.habits
       .filter((h) => h && typeof h.name === 'string')
-      .map((h) => ({
-        id: String(h.id || uid()),
-        name: h.name.slice(0, 40),
-        trigger: String(h.trigger || '').slice(0, 60),
-        goal: String(h.goal || '').slice(0, 80),
-        created: String(h.created || todayKey()),
-        days: Array.isArray(h.days) ? h.days.filter((d) => /^\d{4}-\d{2}-\d{2}$/.test(d)) : [],
-      }));
-    if (!confirm(`Replace your current habits with ${habits.length} from this backup?`)) return;
+      .map((h) => {
+        const log = {};
+        for (const d of Array.isArray(h.days) ? h.days : []) if (day.test(d)) log[d] = { d: 1, t: 0 };
+        for (const [d, m] of Object.entries(h.log || {})) {
+          if (day.test(d)) log[d] = { d: m?.d ? 1 : 0, t: Number(m?.t) || 0 };
+        }
+        return {
+          id: String(h.id || uid()),
+          name: h.name.slice(0, 40),
+          trigger: String(h.trigger || '').slice(0, 60),
+          goal: String(h.goal || '').slice(0, 80),
+          created: String(h.created || todayKey()),
+          updated: Number(h.updated) || Date.now(),
+          log,
+        };
+      });
+    if (!confirm(`Replace your current habits with ${habits.filter((h) => !h.deleted).length} from this backup?`)) return;
     state = { ...state, habits };
     save();
+    queueSync();
     closeSheet();
     build();
   } catch {
     alert("That file doesn't look like a Murmur backup.");
   }
 });
+
+// ---------- sync ----------
+
+const syncBlock = $('#syncBlock');
+const syncStatus = $('#syncStatus');
+const syncForm = $('#syncForm');
+const syncEmail = $('#syncEmail');
+const signOutBtn = $('#signOutBtn');
+let syncTimer = 0, syncing = false, syncNote = '';
+
+function showSync() {
+  if (!sync.configured()) { syncBlock.hidden = true; return; }
+  syncBlock.hidden = false;
+  const on = sync.signedIn();
+  syncForm.hidden = on;
+  signOutBtn.hidden = !on;
+  syncStatus.textContent = syncNote || (on ? `Syncing as ${sync.account() ?? 'signed in'}` : 'Sync is off. Your habits stay on this device.');
+}
+
+/** Debounced: a tap writes locally straight away, the network catches up. */
+function queueSync(delay = 1200) {
+  if (!sync.signedIn()) return;
+  clearTimeout(syncTimer);
+  syncTimer = setTimeout(syncNow, delay);
+}
+
+async function syncNow() {
+  if (!sync.signedIn() || syncing) return;
+  syncing = true;
+  try {
+    const changed = await sync.sync(state);
+    save();
+    if (changed) build();
+    syncNote = '';
+  } catch (err) {
+    syncNote = navigator.onLine ? `Sync failed: ${String(err.message).slice(0, 60)}` : 'Offline. Will sync later.';
+  } finally {
+    syncing = false;
+    showSync();
+  }
+}
+
+sync.onChange((s) => {
+  if (s.error) syncNote = s.error;
+  if (s.signedOut) syncNote = '';
+  showSync();
+});
+
+syncForm?.addEventListener('submit', async (ev) => {
+  ev.preventDefault();
+  const address = syncEmail.value.trim();
+  if (!address) { fx.shake(syncEmail); return; }
+  syncNote = 'Sending…';
+  showSync();
+  try {
+    await sync.sendLink(address);
+    syncNote = `Check ${address} for a sign-in link.`;
+  } catch (err) {
+    syncNote = String(err.message).slice(0, 80);
+  }
+  showSync();
+});
+
+signOutBtn?.addEventListener('click', () => {
+  sync.signOut();
+  showSync();
+});
+
+sync.init();
+showSync();
+if (sync.signedIn()) syncNow();
+
+addEventListener('online', () => queueSync(300));
 
 // ---------- lifecycle ----------
 
@@ -410,8 +517,8 @@ function checkDay() {
 }
 setInterval(checkDay, 60_000);
 document.addEventListener('visibilitychange', () => {
-  if (document.hidden) fields.stop();
-  else { checkDay(); fields.start(); }
+  if (document.hidden) { fields.stop(); queueSync(0); }
+  else { checkDay(); fields.start(); queueSync(400); }
 });
 
 let lastW = innerWidth, resizeT = 0;

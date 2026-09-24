@@ -1,12 +1,20 @@
 // Stale-while-revalidate: opens instantly offline, picks up updates on the next launch.
-const CACHE = 'murmur-v3';
+const CACHE = 'murmur-v4';
 const ASSETS = [
-  './', 'index.html', 'style.css', 'app.js', 'field.js', 'fx.js', 'manifest.webmanifest',
+  './', 'index.html', 'style.css', 'app.js', 'field.js', 'fx.js', 'sync.js', 'manifest.webmanifest',
   'icons/icon.svg', 'icons/icon-180.png', 'icons/icon-192.png', 'icons/icon-512.png',
 ];
 
 self.addEventListener('install', (e) => {
-  e.waitUntil(caches.open(CACHE).then((c) => c.addAll(ASSETS)).then(() => self.skipWaiting()));
+  e.waitUntil(
+    caches.open(CACHE)
+      .then(async (c) => {
+        await c.addAll(ASSETS);
+        // config.js is optional: a local-only copy of the app may not have one.
+        await c.add('config.js').catch(() => {});
+      })
+      .then(() => self.skipWaiting())
+  );
 });
 
 self.addEventListener('activate', (e) => {
