@@ -1,6 +1,11 @@
 # Murmur
 A juicy, minimal habit app.
 
+Progress is a running score, not a streak: a kept day adds one, a missed day
+takes one back (floored at zero, capped at 27). Today only ever adds. The lane's
+chemistry follows that score — starved and sparse at the start (dots), fed and
+dense near the goal — so the pattern itself is the progress bar.
+
 **Live:** https://brendantipney.github.io/Murmur/
 
 A yes/no habit tracker PWA. Each habit has a lane of living Gray-Scott
@@ -65,6 +70,10 @@ dashboard. A paused project doesn't lock you out, it just stops syncing.
 
 ## Tuning
 
-- `PRESETS` in `field.js`: Gray-Scott (F, k) pairs; each habit picks one by id hash.
+- `PATH` in `field.js`: the (F, k) waypoints progress walks along, sparse to dense.
+  Measured coverage runs about 0.10 / 0.34 / 0.51 / 0.67 / 0.86 across it; keep it
+  monotonic and away from regimes that die out.
 - `SIM_SCALE`: sim cells per CSS px (bigger means finer patterns).
+- `GOAL` and `FIRST_DAY` in `app.js`: days to master, and how far day one is
+  cheated forward so it reads as progress.
 - `RIPPLE_SPEED`, and the `feed`/`k` lines in `SIM_FS`: how the tap wave perturbs the chemistry.

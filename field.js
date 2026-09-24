@@ -139,16 +139,26 @@ void main() {
   o = vec4(col * alpha, alpha);
 }`;
 
-// (F, k) pairs that grow into space well; each habit gets one by hash.
-const PRESETS = [
-  { F: 0.0545, k: 0.062 },  // coral
-  { F: 0.037, k: 0.06 },    // fingerprint
-  { F: 0.05, k: 0.065 },    // spots (starling speckle)
-  { F: 0.042, k: 0.059 },   // labyrinth
-  { F: 0.046, k: 0.0594 },  // holes
-  { F: 0.06, k: 0.062 },    // worms
+// The chemistry itself is the progress bar: a path through Gray-Scott space from
+// starved (sparse dots) to fed (dense, joined-up pattern). Habits differ by their
+// seed and hue, not by regime, so two habits at the same level look related.
+const PATH = [
+  { t: 0.00, F: 0.052, k: 0.0665 }, // barely alive: scattered dots
+  { t: 0.25, F: 0.052, k: 0.0645 }, // dots multiply
+  { t: 0.50, F: 0.0545, k: 0.062 }, // coral: dots joining up
+  { t: 0.75, F: 0.045, k: 0.0595 }, // labyrinth
+  { t: 1.00, F: 0.0458, k: 0.0588 }, // dense: ~85% covered, dark veins left for contrast
 ];
-const SIM_SCALE = 0.85;     // sim cells per CSS pixel
+
+export function paramsAt(level) {
+  const t = Math.max(0, Math.min(1, level));
+  let i = 1;
+  while (i < PATH.length - 1 && PATH[i].t < t) i++;
+  const a = PATH[i - 1], b = PATH[i];
+  const u = (t - a.t) / (b.t - a.t);
+  return { F: a.F + (b.F - a.F) * u, k: a.k + (b.k - a.k) * u };
+}
+const SIM_SCALE = 1.25;     // sim cells per CSS pixel: higher means finer detail
 const RIPPLE_SPEED = 0.3;   // cells per step
 
 function hash(str) {
@@ -266,9 +276,9 @@ export class FieldSystem {
       const hs = hash(id);
       f = {
         id, hs,
-        preset: PRESETS[((hs ^ (hs >>> 16)) >>> 0) % PRESETS.length],
         phase: ((hs >>> 8) % 1000) / 1000,
         extent: o.extent, target: o.extent,
+        level: o.level, levelTarget: o.level,
         master: 0, masterTarget: 0,
         ripples: [], busyUntil: 0, cur: 0,
       };
@@ -349,12 +359,13 @@ export class FieldSystem {
     }
   }
 
-  setTarget(id, extent, master, immediate) {
+  setTarget(id, extent, level, master, immediate) {
     const f = this.fields.get(id);
     if (!f) return;
     f.target = extent;
+    f.levelTarget = level;
     f.masterTarget = master;
-    if (immediate) { f.extent = extent; f.master = master; }
+    if (immediate) { f.extent = extent; f.level = level; f.master = master; }
   }
 
   /** Send a wave out from the hex (or from a poke point in canvas CSS px). */
@@ -380,8 +391,9 @@ export class FieldSystem {
     gl.viewport(0, 0, f.sw, f.sh);
     gl.uniform2f(u.uTexel, 1 / f.sw, 1 / f.sh);
     gl.uniform2f(u.uSize, f.sw, f.sh);
-    gl.uniform1f(u.uF, f.preset.F + 0.0005 * Math.sin(this.time * 0.23 + f.phase * 6.283));
-    gl.uniform1f(u.uK, f.preset.k);
+    const chem = paramsAt(f.level);
+    gl.uniform1f(u.uF, chem.F + 0.0005 * Math.sin(this.time * 0.23 + f.phase * 6.283));
+    gl.uniform1f(u.uK, chem.k);
     gl.uniform1f(u.uExtent, f.extent);
     gl.uniform1f(u.uHidden, f.hidden);
     gl.activeTexture(gl.TEXTURE0);
@@ -446,8 +458,10 @@ export class FieldSystem {
     for (const f of this.fields.values()) {
       if (!f.tex || !f.visible || !f.canvas.isConnected) continue;
       f.extent += (f.target - f.extent) * Math.min(1, dt * 1.5);
+      f.level += (f.levelTarget - f.level) * Math.min(1, dt * 0.8);
       f.master += (f.masterTarget - f.master) * Math.min(1, dt * 1.5);
-      const busy = f.ripples.length || this.time < f.busyUntil || Math.abs(f.target - f.extent) > 0.003;
+      const busy = f.ripples.length || this.time < f.busyUntil
+        || Math.abs(f.target - f.extent) > 0.003 || Math.abs(f.levelTarget - f.level) > 0.004;
       this.step(f, busy ? 8 : 2);
       this.draw(f);
     }

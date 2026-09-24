@@ -1,4 +1,4 @@
-import { FieldSystem } from './field.js';
+﻿import { FieldSystem } from './field.js';
 import * as fx from './fx.js';
 import * as sync from './sync.js';
 
@@ -51,13 +51,27 @@ function prevKey(k) {
   return keyOf(new Date(y, m - 1, d - 1));
 }
 
-/** Consecutive days ending today, or yesterday if today isn't done yet. */
-function streakOf(h) {
-  const set = new Set(doneDays(h));
-  let k = todayKey();
-  if (!set.has(k)) k = prevKey(k);
+function nextKey(k) {
+  const [y, m, d] = k.split('-').map(Number);
+  return keyOf(new Date(y, m - 1, d + 1));
+}
+
+/**
+ * Running score rather than a streak: a kept day adds one, a missed day takes
+ * one back, floored at zero and capped at the goal. Today only ever adds — it
+ * doesn't count against you until it's over.
+ */
+function progressOf(h) {
+  const done = doneDays(h);
+  if (!done.length) return 0;
+  const set = new Set(done);
+  const today = todayKey();
+  let k = h.created && h.created <= done[0] ? h.created : done.slice().sort()[0];
   let n = 0;
-  while (set.has(k)) { n++; k = prevKey(k); }
+  for (let guard = 0; guard < 4000 && k <= today; guard++, k = nextKey(k)) {
+    if (set.has(k)) n = Math.min(GOAL, n + 1);
+    else if (k !== today) n = Math.max(0, n - 1);
+  }
   return n;
 }
 const doneToday = (h) => !!h.log[todayKey()]?.d;
@@ -75,14 +89,15 @@ function computeGeo() {
   const hexH = hexW / 0.866;      // pointy-top hexes: the long axis is vertical
   // True honeycomb: each row steps half a width across and three quarters of a
   // height down, so neighbouring hexes share a whole slanted edge.
-  // On each side the rows alternate details, lane, details, so a lane's
-  // neighbours above and below are 1.5 hex heights apart: fill that gap.
-  const infoH = Math.round(hexH * 0.55);
+  // Each side of the column is a stack of alternating details and lanes at a
+  // pitch of 1.5 hex heights. Half a hex plus a whole hex fills that exactly,
+  // and puts every shared edge on the height of a hexagon's side corner.
   return {
-    W, hexW, hexH, infoH,
+    W, hexW, hexH,
     step: hexH * 0.75,
     off: hexW * 0.5,
-    fieldH: hexH * 1.5 - infoH - 6, // pattern lane, centred on its hex
+    infoH: hexH * 0.5,
+    fieldH: hexH,
     pad: 6,
     top: 10,
     radius: 14,
@@ -167,13 +182,14 @@ function makeRow(h, i) {
   col.appendChild(row);
 
   const e = { h, row, info, hex, cv, fieldW: r.field.w, mirror: !r.left };
-  const s = streakOf(h);
+  const s = progressOf(h);
   if (fields.ok) {
     fields.attach(h.id, cv, {
       w: r.field.w, h: geo.fieldH, mirror: !r.left, radius: geo.radius,
       originY: 0.5, // the lane is centred on the hex
       hidden: hiddenFor(r.field.w),
       extent: extentFor(s, r.field.w),
+      level: s / GOAL,
     });
   } else {
     cv.classList.add('fallback');
@@ -220,7 +236,7 @@ function build() {
 
 function refresh(e, immediate = false) {
   const { h, hex, cv } = e;
-  const s = streakOf(h);
+  const s = progressOf(h);
   const done = doneToday(h);
   const mastered = s >= GOAL;
   hex.classList.toggle('done', done);
@@ -229,7 +245,7 @@ function refresh(e, immediate = false) {
   hex.setAttribute('aria-label', `${h.name}: ${done ? 'done today' : 'not done yet today'}, day ${s} of ${GOAL}`);
   hex.querySelector('.count').innerHTML = `${s}<i>/${GOAL}</i>`;
   const ext = extentFor(s, e.fieldW);
-  if (fields.ok) fields.setTarget(h.id, ext, mastered ? 1 : 0, immediate);
+  if (fields.ok) fields.setTarget(h.id, ext, s / GOAL, mastered ? 1 : 0, immediate);
   else cv.style.setProperty('--ext', ext * 100 + '%');
 }
 
@@ -251,7 +267,7 @@ function onHex(e) {
   save();
   queueSync();
 
-  const s = streakOf(h);
+  const s = progressOf(h);
   const b = hex.getBoundingClientRect();
   const x = b.left + b.width / 2, y = b.top + b.height / 2;
   fx.haptic();
