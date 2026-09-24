@@ -54,10 +54,24 @@ To turn it on:
    Safe to use the same project as other apps; these are their own tables.
 2. **Settings -> API**: copy the Project URL and the anon key into `config.js`.
    The anon key is public by design; row-level security is what protects the data.
-3. **Authentication -> URL Configuration**: add the Pages URL
-   (`https://<you>.github.io/Murmur/`) as Site URL and as a redirect URL, or the
-   magic link will bounce.
-4. Commit `config.js`, push, then use **… -> Email me a sign-in link** in the app.
+3. **Authentication -> Emails -> Magic Link template**: include the code as well
+   as the link, or an installed app cannot sign in (see below):
+
+   ```html
+   <h2>Sign in to Murmur</h2>
+   <p>Your code is <strong>{{ .Token }}</strong></p>
+   <p>Or <a href="{{ .ConfirmationURL }}">sign in here</a> if you are on a computer.</p>
+   ```
+4. **Authentication -> URL Configuration**: add the Pages URL
+   (`https://<you>.github.io/Murmur/`) as Site URL and as a redirect URL, so the
+   link in that mail works too.
+5. Commit `config.js`, push, then use **… -> Email me a code** in the app.
+
+Sign-in is by six-digit code, not by following the link. On iOS a link from Mail
+always opens in Safari, which has its own storage separate from the installed
+app, so a link would sign in the wrong copy. Typing the code keeps the session
+where it belongs; iOS offers the code above the keyboard. The link still works
+for a normal browser.
 
 How it works: the device stays the source of truth, so the app works offline and
 syncs when it can. Each sync pushes everything it holds and merges what comes

@@ -53,6 +53,29 @@ export function init() {
   }
 }
 
+/**
+ * Verify the six-digit code from the email. This is the path that works for an
+ * installed app: a link from Mail always opens in Safari, which has its own
+ * storage, so the session would land in the wrong place.
+ */
+export async function verifyCode(address, token) {
+  const attempt = (type) => fetch(`${SUPABASE.url}/auth/v1/verify`, {
+    method: 'POST',
+    headers: { apikey: SUPABASE.anonKey, 'Content-Type': 'application/json' },
+    body: JSON.stringify({ type, email: address, token: token.trim() }),
+  });
+  let res = await attempt('email');
+  if (!res.ok) res = await attempt('magiclink'); // depending on how the mail was generated
+  if (!res.ok) {
+    const body = await res.json().catch(() => ({}));
+    throw new Error(body.msg || body.error_description || 'That code was not accepted');
+  }
+  const j = await res.json();
+  tok = { access_token: j.access_token, refresh_token: j.refresh_token };
+  store();
+  emit({ signedIn: true });
+}
+
 export async function sendLink(address) {
   const redirect = location.origin + location.pathname;
   const res = await fetch(`${SUPABASE.url}/auth/v1/otp?redirect_to=${encodeURIComponent(redirect)}`, {

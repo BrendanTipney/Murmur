@@ -457,14 +457,21 @@ const syncBlock = $('#syncBlock');
 const syncStatus = $('#syncStatus');
 const syncForm = $('#syncForm');
 const syncEmail = $('#syncEmail');
+const codeForm = $('#codeForm');
+const syncCode = $('#syncCode');
 const signOutBtn = $('#signOutBtn');
+const EMAIL_KEY = 'murmur.email';
 let syncTimer = 0, syncing = false, syncNote = '';
+let awaitingCode = '';
+
+try { syncEmail.value = localStorage.getItem(EMAIL_KEY) || ''; } catch {}
 
 function showSync() {
   if (!sync.configured()) { syncBlock.hidden = true; return; }
   syncBlock.hidden = false;
   const on = sync.signedIn();
-  syncForm.hidden = on;
+  syncForm.hidden = on || !!awaitingCode;
+  codeForm.hidden = on || !awaitingCode;
   signOutBtn.hidden = !on;
   syncStatus.textContent = syncNote || (on ? `Syncing as ${sync.account() ?? 'signed in'}` : 'Sync is off. Your habits stay on this device.');
 }
@@ -506,10 +513,42 @@ syncForm?.addEventListener('submit', async (ev) => {
   showSync();
   try {
     await sync.sendLink(address);
-    syncNote = `Check ${address} for a sign-in link.`;
+    awaitingCode = address;
+    try { localStorage.setItem(EMAIL_KEY, address); } catch {}
+    syncNote = `Enter the code sent to ${address}.`;
+    showSync();
+    syncCode.focus({ preventScroll: true });
+    return;
   } catch (err) {
     syncNote = String(err.message).slice(0, 80);
   }
+  showSync();
+});
+
+codeForm?.addEventListener('submit', async (ev) => {
+  ev.preventDefault();
+  const code = syncCode.value.trim();
+  if (!code) { fx.shake(syncCode); return; }
+  syncNote = 'Checking…';
+  showSync();
+  try {
+    await sync.verifyCode(awaitingCode, code);
+    awaitingCode = '';
+    syncCode.value = '';
+    syncNote = '';
+    showSync();
+    await syncNow();
+  } catch (err) {
+    syncNote = String(err.message).slice(0, 80);
+    fx.shake(syncCode);
+    showSync();
+  }
+});
+
+$('#cancelCode')?.addEventListener('click', () => {
+  awaitingCode = '';
+  syncCode.value = '';
+  syncNote = '';
   showSync();
 });
 

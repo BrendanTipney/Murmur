@@ -360,6 +360,8 @@ button { font: inherit; color: inherit; }
   appearance: none;
 }
 .sync-form input:focus { border-color: #5a5f70; }
+#syncCode { letter-spacing: 0.3em; font-size: 20px; text-align: center; }
+.btn.quiet { border-color: transparent; font-size: 13px; font-weight: 500; color: var(--muted); padding: 8px; }
 .sync-form input::placeholder { color: #45454c; }
 .menu-list .btn { text-align: left; font-weight: 500; }
 

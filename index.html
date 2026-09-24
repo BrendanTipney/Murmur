@@ -51,8 +51,13 @@
     <div id="syncBlock" class="sync-block" hidden>
       <div class="sync-status" id="syncStatus"></div>
       <form id="syncForm" class="sync-form" autocomplete="off">
-        <input id="syncEmail" type="email" inputmode="email" autocomplete="email" placeholder="you@example.com" aria-label="Email for sign-in link">
-        <button type="submit" class="btn ghost">Email me a sign-in link</button>
+        <input id="syncEmail" type="email" inputmode="email" autocomplete="email" placeholder="you@example.com" aria-label="Email address">
+        <button type="submit" class="btn ghost">Email me a code</button>
+      </form>
+      <form id="codeForm" class="sync-form" autocomplete="off" hidden>
+        <input id="syncCode" type="text" inputmode="numeric" autocomplete="one-time-code" maxlength="8" placeholder="123456" aria-label="Six-digit code from the email">
+        <button type="submit" class="btn ghost">Sign in</button>
+        <button type="button" class="btn ghost quiet" id="cancelCode">Use a different email</button>
       </form>
       <button type="button" class="btn ghost" id="signOutBtn" hidden>Sign out</button>
     </div>
