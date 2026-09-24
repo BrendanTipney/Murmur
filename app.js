@@ -75,12 +75,14 @@ function computeGeo() {
   const hexH = hexW / 0.866;      // pointy-top hexes: the long axis is vertical
   // True honeycomb: each row steps half a width across and three quarters of a
   // height down, so neighbouring hexes share a whole slanted edge.
+  // On each side the rows alternate details, lane, details, so a lane's
+  // neighbours above and below are 1.5 hex heights apart: fill that gap.
+  const infoH = Math.round(hexH * 0.55);
   return {
-    W, hexW, hexH,
+    W, hexW, hexH, infoH,
     step: hexH * 0.75,
     off: hexW * 0.5,
-    fieldH: hexH * 0.75 - 4,        // pattern lane, centred on its hex
-    infoH: Math.round(hexH * 0.55), // details: a slimmer strip, also centred
+    fieldH: hexH * 1.5 - infoH - 6, // pattern lane, centred on its hex
     pad: 6,
     top: 10,
     radius: 14,
