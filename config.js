@@ -5,6 +5,6 @@
 // and is safe to commit, because row-level security is what protects the data
 // (see supabase-setup.sql).
 export const SUPABASE = {
-  url: '',
-  anonKey: '',
+  url: 'https://anpppsamiaukfdodcynm.supabase.co',
+  anonKey: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImFucHBwc2FtaWF1a2Zkb2RjeW5tIiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTAyNDg2MjEsImV4cCI6MjEwNTgyNDYyMX0.RxK8Gqaz6rf5DXyhF0W0pOdFwYbeSKAkJH64nrSiCBI',
 };
