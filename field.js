@@ -56,24 +56,40 @@ void main() {
   feed = min(feed, 1.5) * (1.0 - outside);
   starve = min(starve, 1.5);
 
-  // Inside the front the diffusion rates diverge further (V slows right down
-  // relative to U), sharpening the Turing instability: spots bud and split,
-  // stripes wrinkle and branch. Feed/kill tilt toward growth at the same time.
-  float Fr = uF + feed * 0.010;
-  float k = uK + outside * 0.07 - feed * 0.006 + starve * 0.005;
+  // The front is a pulse of feed: F climbs steeply, kill dips, and the diffusion
+  // rates diverge (V slows right down relative to U), sharpening the Turing
+  // instability so spots bud and split and stripes wrinkle and branch.
+  float Fr = uF + feed * 0.022;
+  float k = uK + outside * 0.07 - feed * 0.008 + starve * 0.005;
   float Dv = 0.5 - feed * 0.28;
   float uvv = u * v * v;
   float du = lap.x - uvv + Fr * (1.0 - u);
   float dv = Dv * lap.y + uvv - (Fr + k) * v;
 
-  // sparse seed points in the front, so bare ground can sprout
-  vec2 cell = floor(p / 3.0);
-  float seedPt = step(0.93, fract(sin(dot(cell, vec2(12.9898, 78.233))) * 43758.5453));
-  dv += feed * seedPt * 0.06 * u * (1.0 - smoothstep(0.02, 0.15, v));
-  du -= feed * seedPt * 0.03 * u * (1.0 - smoothstep(0.02, 0.15, v));
+  // Feed alone cannot start anything on bare ground: V = 0 is a stable state, so
+  // there has to be a spark. Sample a ring to find ground that is genuinely open
+  // (not just the gap between two spots) and nucleate there, unevenly, so the
+  // front leaves seeds that grow into pattern rather than a flat sheet of V.
+  float r6 = 6.0;
+  float around = max(
+    max(texture(uS, vUv + vec2(r6, 0.0) * uTexel).g, texture(uS, vUv - vec2(r6, 0.0) * uTexel).g),
+    max(texture(uS, vUv + vec2(0.0, r6) * uTexel).g, texture(uS, vUv - vec2(0.0, r6) * uTexel).g));
+  float open = 1.0 - smoothstep(0.02, 0.12, max(around, v));
+  // Blobs, not speckle: a seed only a cell or two across diffuses away before it
+  // can sustain itself, so nucleate in 5-cell blocks like the initial seeding.
+  float grain = fract(sin(dot(floor(p / 5.0), vec2(12.9898, 78.233))) * 43758.5453);
+  float spark = feed * open * step(0.7, grain);
 
   float nu = clamp(u + du, 0.0, 1.0);
   float nv = clamp(v + dv, 0.0, 1.0);
+  // Below roughly F + k a seed just decays away, so the front deposits catalyst
+  // at a level that survives instead of dribbling it in.
+  // A seed has to beat (F + k) / u to survive, so deposit a fixed viable level
+  // wherever the front sparks rather than a level proportional to it, and leave
+  // U high — starving the substrate at the same time is what killed earlier tries.
+  float on = step(0.12, spark);
+  nv = max(nv, on * 0.45);
+  nu = min(nu, 1.0 - on * 0.25);
   float act = max(c.b * 0.975, min(1.0, abs(nv - v) * 45.0));
   o = vec4(nu, nv, act, 1.0);
 }`;
@@ -457,7 +473,9 @@ export class FieldSystem {
     if (!this.ok) return;
     for (const f of this.fields.values()) {
       if (!f.tex || !f.visible || !f.canvas.isConnected) continue;
-      f.extent += (f.target - f.extent) * Math.min(1, dt * 1.5);
+      // Open new ground quickly so it is ready when the wave front arrives;
+      // give it back slowly, so a missed day reads as a gentle retreat.
+      f.extent += (f.target - f.extent) * Math.min(1, dt * (f.target > f.extent ? 7 : 1.2));
       f.level += (f.levelTarget - f.level) * Math.min(1, dt * 0.8);
       f.master += (f.masterTarget - f.master) * Math.min(1, dt * 1.5);
       const busy = f.ripples.length || this.time < f.busyUntil
