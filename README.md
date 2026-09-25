@@ -67,11 +67,16 @@ To turn it on:
    link in that mail works too.
 5. Commit `config.js`, push, then use **… -> Email me a code** in the app.
 
-Sign-in is by six-digit code, not by following the link. On iOS a link from Mail
-always opens in Safari, which has its own storage separate from the installed
-app, so a link would sign in the wrong copy. Typing the code keeps the session
-where it belongs; iOS offers the code above the keyboard. The link still works
-for a normal browser.
+On iOS a link from Mail always opens in Safari, which has its own storage
+separate from the installed app, so following the link signs in the wrong copy.
+Two ways around it, and the app accepts either in the same box:
+
+- **Emailed code** — needs `{{ .Token }}` in the template. Note that Supabase
+  picks the template by account state: a new or unconfirmed user gets **Confirm
+  signup**, an existing one gets **Magic Link**, so put the code in both.
+- **Transfer code** — needs no template change. Follow the link in the browser;
+  it signs in there, shows a transfer code and explains what to do. Copy it,
+  open the home-screen app, and paste it into the same code box.
 
 How it works: the device stays the source of truth, so the app works offline and
 syncs when it can. Each sync pushes everything it holds and merges what comes

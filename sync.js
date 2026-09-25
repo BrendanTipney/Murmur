@@ -13,7 +13,15 @@ import { SUPABASE } from './config.js';
 
 const TOKEN_KEY = 'murmur.session';
 let tok = null;
+let handoff = null;
 const listeners = [];
+
+const standalone = () =>
+  window.matchMedia?.('(display-mode: standalone)').matches || navigator.standalone === true;
+
+/** A session captured in the browser that the installed app can be handed. */
+export const handoffCode = () => handoff;
+export const clearHandoff = () => { handoff = null; };
 
 export const configured = () => !!(SUPABASE.url && SUPABASE.anonKey);
 export const signedIn = () => !!tok;
@@ -44,6 +52,10 @@ export function init() {
   if (access) {
     tok = { access_token: access, refresh_token: hash.get('refresh_token') };
     store();
+    // A link from Mail always lands in the browser, never in the installed app,
+    // and the two have separate storage. So when we are not the installed app,
+    // offer this session for transfer instead of stranding it here.
+    if (!standalone()) handoff = tok.refresh_token;
     history.replaceState(null, '', location.pathname + location.search);
   }
   const err = hash.get('error_description');
@@ -70,6 +82,20 @@ export async function verifyCode(address, token) {
     const body = await res.json().catch(() => ({}));
     throw new Error(body.msg || body.error_description || 'That code was not accepted');
   }
+  const j = await res.json();
+  tok = { access_token: j.access_token, refresh_token: j.refresh_token };
+  store();
+  emit({ signedIn: true });
+}
+
+/** Adopt a session handed over from the browser (see handoffCode). */
+export async function signInWithTransfer(refreshToken) {
+  const res = await fetch(`${SUPABASE.url}/auth/v1/token?grant_type=refresh_token`, {
+    method: 'POST',
+    headers: { apikey: SUPABASE.anonKey, 'Content-Type': 'application/json' },
+    body: JSON.stringify({ refresh_token: refreshToken.trim() }),
+  });
+  if (!res.ok) throw new Error('That sign-in code was not accepted');
   const j = await res.json();
   tok = { access_token: j.access_token, refresh_token: j.refresh_token };
   store();

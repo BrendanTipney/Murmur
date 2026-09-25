@@ -460,6 +460,8 @@ const syncEmail = $('#syncEmail');
 const codeForm = $('#codeForm');
 const syncCode = $('#syncCode');
 const signOutBtn = $('#signOutBtn');
+const handoffBlock = $('#handoffBlock');
+const handoffInput = $('#handoffCode');
 const EMAIL_KEY = 'murmur.email';
 let syncTimer = 0, syncing = false, syncNote = '';
 let awaitingCode = '';
@@ -470,10 +472,16 @@ function showSync() {
   if (!sync.configured()) { syncBlock.hidden = true; return; }
   syncBlock.hidden = false;
   const on = sync.signedIn();
+  const handoff = sync.handoffCode();
   syncForm.hidden = on || !!awaitingCode;
-  codeForm.hidden = on || !awaitingCode;
+  codeForm.hidden = on || !!handoff;   // always available: it also takes a transfer code
+  $('#cancelCode').hidden = !awaitingCode;
+  handoffBlock.hidden = !handoff;
+  if (handoff) handoffInput.value = handoff;
   signOutBtn.hidden = !on;
-  syncStatus.textContent = syncNote || (on ? `Syncing as ${sync.account() ?? 'signed in'}` : 'Sync is off. Your habits stay on this device.');
+  syncStatus.textContent = syncNote
+    || (handoff ? 'Signed in here. Open Murmur from your home screen, tap ⋯, and paste this code to sign that copy in.' : '')
+    || (on ? `Syncing as ${sync.account() ?? 'signed in'}` : 'Sync is off. Your habits stay on this device.');
 }
 
 /** Debounced: a tap writes locally straight away, the network catches up. */
@@ -532,7 +540,9 @@ codeForm?.addEventListener('submit', async (ev) => {
   syncNote = 'Checking…';
   showSync();
   try {
-    await sync.verifyCode(awaitingCode, code);
+    // Short digits are the emailed code; anything longer is a transfer code.
+    if (code.length > 10) await sync.signInWithTransfer(code);
+    else await sync.verifyCode(awaitingCode, code);
     awaitingCode = '';
     syncCode.value = '';
     syncNote = '';
@@ -543,6 +553,17 @@ codeForm?.addEventListener('submit', async (ev) => {
     fx.shake(syncCode);
     showSync();
   }
+});
+
+$('#copyHandoff')?.addEventListener('click', async () => {
+  handoffInput.select();
+  try {
+    await navigator.clipboard.writeText(handoffInput.value);
+    syncNote = 'Copied. Paste it into the home-screen app.';
+  } catch {
+    syncNote = 'Press and hold the code to copy it.';
+  }
+  showSync();
 });
 
 $('#cancelCode')?.addEventListener('click', () => {
@@ -559,6 +580,7 @@ signOutBtn?.addEventListener('click', () => {
 
 sync.init();
 showSync();
+if (sync.handoffCode()) openSheet(menuSheet); // surface the transfer code straight away
 if (sync.signedIn()) syncNow();
 
 addEventListener('online', () => queueSync(300));
