@@ -67,9 +67,16 @@ To turn it on:
    link in that mail works too.
 5. Commit `config.js`, push, then use **… -> Email me a code** in the app.
 
-On iOS a link from Mail always opens in Safari, which has its own storage
-separate from the installed app, so following the link signs in the wrong copy.
-Two ways around it, and the app accepts either in the same box:
+**Sign in with email and password.** This is the path that works in an installed
+app: no email round trip, nothing to transfer. If the account already exists
+without a password, set one from a copy that is signed in (⋯ → Set a password),
+then use it everywhere. Supabase Auth has no passkey support, so that would need
+a separate server to verify WebAuthn.
+
+The email routes below still exist under "Sign in with an emailed code instead",
+but they are awkward on iOS: a link from Mail always opens in Safari, which has
+its own storage separate from the installed app, so following the link signs in
+the wrong copy. Two ways around that, and the app accepts either in the code box:
 
 - **Emailed code** — needs `{{ .Token }}` in the template. Note that Supabase
   picks the template by account state: a new or unconfirmed user gets **Confirm

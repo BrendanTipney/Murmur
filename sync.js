@@ -109,6 +109,54 @@ export async function signInWithTransfer(refreshToken) {
   emit({ signedIn: true });
 }
 
+/** The reliable path: works in the installed app with no email round trip. */
+export async function signInWithPassword(address, password) {
+  const res = await fetch(`${SUPABASE.url}/auth/v1/token?grant_type=password`, {
+    method: 'POST',
+    headers: { apikey: SUPABASE.anonKey, 'Content-Type': 'application/json' },
+    body: JSON.stringify({ email: address, password }),
+  });
+  const body = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(body.msg || body.error_description || body.error || `Sign-in failed (${res.status})`);
+  tok = { access_token: body.access_token, refresh_token: body.refresh_token };
+  store();
+  emit({ signedIn: true });
+}
+
+/** Create the account, when there isn't one yet. */
+export async function signUp(address, password) {
+  const res = await fetch(`${SUPABASE.url}/auth/v1/signup`, {
+    method: 'POST',
+    headers: { apikey: SUPABASE.anonKey, 'Content-Type': 'application/json' },
+    body: JSON.stringify({ email: address, password }),
+  });
+  const body = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(body.msg || body.error_description || body.error || `Could not create the account (${res.status})`);
+  if (!body.access_token) return false; // the project wants the address confirmed first
+  tok = { access_token: body.access_token, refresh_token: body.refresh_token };
+  store();
+  emit({ signedIn: true });
+  return true;
+}
+
+/** Set (or change) the password for the signed-in account. */
+export async function setPassword(password, retry = true) {
+  const res = await fetch(`${SUPABASE.url}/auth/v1/user`, {
+    method: 'PUT',
+    headers: {
+      apikey: SUPABASE.anonKey,
+      Authorization: `Bearer ${tok?.access_token}`,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({ password }),
+  });
+  if (res.status === 401 && retry && (await refresh())) return setPassword(password, false);
+  if (!res.ok) {
+    const body = await res.json().catch(() => ({}));
+    throw new Error(body.msg || body.error_description || body.error || `Could not save the password (${res.status})`);
+  }
+}
+
 export async function sendLink(address) {
   const redirect = location.origin + location.pathname;
   const res = await fetch(`${SUPABASE.url}/auth/v1/otp?redirect_to=${encodeURIComponent(redirect)}`, {

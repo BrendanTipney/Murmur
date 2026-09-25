@@ -50,6 +50,18 @@
   <div class="menu-list">
     <div id="syncBlock" class="sync-block" hidden>
       <div class="sync-status" id="syncStatus"></div>
+      <form id="pwForm" class="sync-form" hidden>
+        <input id="pwEmail" type="email" inputmode="email" autocomplete="username" placeholder="you@example.com" aria-label="Email address">
+        <input id="pwPass" type="password" autocomplete="current-password" placeholder="password" aria-label="Password">
+        <button type="submit" class="btn ghost">Sign in</button>
+        <button type="button" class="btn ghost quiet" id="createBtn">Create an account</button>
+        <button type="button" class="btn ghost quiet" id="codeToggle">Sign in with an emailed code instead</button>
+      </form>
+      <form id="setPwForm" class="sync-form" hidden>
+        <div class="sync-label">Set a password to sign in on other devices</div>
+        <input id="newPass" type="password" autocomplete="new-password" placeholder="new password" aria-label="New password">
+        <button type="submit" class="btn ghost">Save password</button>
+      </form>
       <form id="syncForm" class="sync-form" autocomplete="off">
         <input id="syncEmail" type="email" inputmode="email" autocomplete="email" placeholder="you@example.com" aria-label="Email address">
         <button type="submit" class="btn ghost">Email me a code</button>

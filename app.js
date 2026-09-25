@@ -4,7 +4,7 @@ import * as sync from './sync.js';
 
 const GOAL = 27;
 const KEY = 'murmur.v1';
-const VERSION = 'v12'; // keep in step with CACHE in sw.js
+const VERSION = 'v13'; // keep in step with CACHE in sw.js
 const $ = (s) => document.querySelector(s);
 
 // ---------- storage ----------
@@ -477,19 +477,32 @@ const syncCode = $('#syncCode');
 const signOutBtn = $('#signOutBtn');
 const handoffBlock = $('#handoffBlock');
 const handoffInput = $('#handoffCode');
+const pwForm = $('#pwForm');
+const pwEmail = $('#pwEmail');
+const pwPass = $('#pwPass');
+const setPwForm = $('#setPwForm');
+const newPass = $('#newPass');
 const EMAIL_KEY = 'murmur.email';
 let syncTimer = 0, syncing = false, syncNote = '';
 let awaitingCode = '';
+let codeMode = false;
 
-try { syncEmail.value = localStorage.getItem(EMAIL_KEY) || ''; } catch {}
+try {
+  const saved = localStorage.getItem(EMAIL_KEY) || '';
+  syncEmail.value = saved;
+  pwEmail.value = saved;
+} catch {}
+const rememberEmail = (address) => { try { localStorage.setItem(EMAIL_KEY, address); } catch {} };
 
 function showSync() {
   if (!sync.configured()) { syncBlock.hidden = true; return; }
   syncBlock.hidden = false;
   const on = sync.signedIn();
   const transfer = sync.transferCode();   // shown whenever signed in, so it can always be grabbed
-  syncForm.hidden = on || !!awaitingCode;
-  codeForm.hidden = on;                   // takes the emailed code or a transfer code
+  pwForm.hidden = on;
+  setPwForm.hidden = !on;
+  syncForm.hidden = on || !codeMode || !!awaitingCode;
+  codeForm.hidden = on || !codeMode;      // takes the emailed code or a transfer code
   $('#cancelCode').hidden = !awaitingCode;
   handoffBlock.hidden = !transfer;
   if (transfer) handoffInput.value = transfer;
@@ -528,6 +541,71 @@ sync.onChange((s) => {
   showSync();
 });
 
+pwForm?.addEventListener('submit', async (ev) => {
+  ev.preventDefault();
+  const address = pwEmail.value.trim();
+  const pass = pwPass.value;
+  if (!address) { fx.shake(pwEmail); return; }
+  if (!pass) { fx.shake(pwPass); return; }
+  syncNote = 'Signing in…';
+  showSync();
+  try {
+    await sync.signInWithPassword(address, pass);
+    rememberEmail(address);
+    pwPass.value = '';
+    syncNote = '';
+    showSync();
+    await syncNow();
+  } catch (err) {
+    syncNote = String(err.message).slice(0, 90);
+    fx.shake(pwPass);
+    showSync();
+  }
+});
+
+$('#createBtn')?.addEventListener('click', async () => {
+  const address = pwEmail.value.trim();
+  const pass = pwPass.value;
+  if (!address) { fx.shake(pwEmail); return; }
+  if (pass.length < 8) { syncNote = 'Choose a password of at least 8 characters.'; fx.shake(pwPass); showSync(); return; }
+  syncNote = 'Creating…';
+  showSync();
+  try {
+    const signedIn = await sync.signUp(address, pass);
+    rememberEmail(address);
+    pwPass.value = '';
+    syncNote = signedIn ? '' : 'Account made. Confirm the address from your email, then sign in.';
+    showSync();
+    if (signedIn) await syncNow();
+  } catch (err) {
+    syncNote = String(err.message).slice(0, 90);
+    showSync();
+  }
+});
+
+setPwForm?.addEventListener('submit', async (ev) => {
+  ev.preventDefault();
+  const pass = newPass.value;
+  if (pass.length < 8) { syncNote = 'Choose a password of at least 8 characters.'; fx.shake(newPass); showSync(); return; }
+  syncNote = 'Saving…';
+  showSync();
+  try {
+    await sync.setPassword(pass);
+    newPass.value = '';
+    syncNote = 'Password saved. Sign in with it on your other devices.';
+  } catch (err) {
+    syncNote = String(err.message).slice(0, 90);
+    fx.shake(newPass);
+  }
+  showSync();
+});
+
+$('#codeToggle')?.addEventListener('click', () => {
+  codeMode = !codeMode;
+  syncNote = '';
+  showSync();
+});
+
 syncForm?.addEventListener('submit', async (ev) => {
   ev.preventDefault();
   const address = syncEmail.value.trim();
@@ -537,7 +615,7 @@ syncForm?.addEventListener('submit', async (ev) => {
   try {
     await sync.sendLink(address);
     awaitingCode = address;
-    try { localStorage.setItem(EMAIL_KEY, address); } catch {}
+    rememberEmail(address);
     syncNote = `Enter the code sent to ${address}.`;
     showSync();
     syncCode.focus({ preventScroll: true });
