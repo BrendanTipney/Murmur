@@ -362,6 +362,8 @@ button { font: inherit; color: inherit; }
 .sync-form input:focus { border-color: #5a5f70; }
 #syncCode { letter-spacing: 0.18em; text-align: center; }
 #handoffCode { font-size: 11px; letter-spacing: 0; color: var(--muted); }
+.sync-label { font-size: 11px; letter-spacing: .08em; text-transform: uppercase; color: var(--faint); }
+.version { text-align: center; font-size: 11px; color: var(--faint); padding-top: 2px; }
 .btn.quiet { border-color: transparent; font-size: 13px; font-weight: 500; color: var(--muted); padding: 8px; }
 .sync-form input::placeholder { color: #45454c; }
 .menu-list .btn { text-align: left; font-weight: 500; }

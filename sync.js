@@ -23,6 +23,10 @@ const standalone = () =>
 export const handoffCode = () => handoff;
 export const clearHandoff = () => { handoff = null; };
 
+/** The current session, in a form another device can adopt. Always available
+ *  while signed in, so it can be grabbed whenever it is needed. */
+export const transferCode = () => tok?.refresh_token ?? null;
+
 export const configured = () => !!(SUPABASE.url && SUPABASE.anonKey);
 export const signedIn = () => !!tok;
 export const onChange = (fn) => listeners.push(fn);
@@ -95,7 +99,10 @@ export async function signInWithTransfer(refreshToken) {
     headers: { apikey: SUPABASE.anonKey, 'Content-Type': 'application/json' },
     body: JSON.stringify({ refresh_token: refreshToken.trim() }),
   });
-  if (!res.ok) throw new Error('That sign-in code was not accepted');
+  if (!res.ok) {
+    const body = await res.json().catch(() => ({}));
+    throw new Error(body.msg || body.error_description || body.error || `Not accepted (${res.status})`);
+  }
   const j = await res.json();
   tok = { access_token: j.access_token, refresh_token: j.refresh_token };
   store();

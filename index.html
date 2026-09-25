@@ -60,6 +60,7 @@
         <button type="button" class="btn ghost quiet" id="cancelCode">Use a different email</button>
       </form>
       <div id="handoffBlock" class="sync-form" hidden>
+        <div class="sync-label">Transfer code — paste this into another device to sign it in</div>
         <input id="handoffCode" readonly aria-label="Transfer code">
         <button type="button" class="btn ghost" id="copyHandoff">Copy transfer code</button>
       </div>
@@ -69,6 +70,8 @@
     <button type="button" class="btn ghost" id="exportBtn">Export backup</button>
     <button type="button" class="btn ghost" id="importBtn">Import backup</button>
     <input type="file" id="importFile" accept="application/json,.json" hidden>
+    <button type="button" class="btn ghost" id="updateBtn">Check for update</button>
+    <div class="version" id="version"></div>
   </div>
 </section>
 

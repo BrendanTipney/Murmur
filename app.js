@@ -4,6 +4,7 @@ import * as sync from './sync.js';
 
 const GOAL = 27;
 const KEY = 'murmur.v1';
+const VERSION = 'v12'; // keep in step with CACHE in sw.js
 const $ = (s) => document.querySelector(s);
 
 // ---------- storage ----------
@@ -396,6 +397,20 @@ soundBtn.addEventListener('click', () => {
   fx.chime(5, state.sound);
 });
 
+$('#version').textContent = `Murmur ${VERSION}`;
+
+// The cache serves the old copy first, so an update can otherwise take two
+// launches to appear. This forces a fresh one.
+$('#updateBtn').addEventListener('click', async () => {
+  $('#updateBtn').textContent = 'Updating…';
+  try {
+    const reg = await navigator.serviceWorker?.getRegistration();
+    await reg?.update();
+    for (const k of await caches.keys()) await caches.delete(k);
+  } catch {}
+  location.reload();
+});
+
 $('#exportBtn').addEventListener('click', async () => {
   const name = `murmur-${todayKey()}.json`;
   const text = JSON.stringify(state, null, 2);
@@ -472,15 +487,15 @@ function showSync() {
   if (!sync.configured()) { syncBlock.hidden = true; return; }
   syncBlock.hidden = false;
   const on = sync.signedIn();
-  const handoff = sync.handoffCode();
+  const transfer = sync.transferCode();   // shown whenever signed in, so it can always be grabbed
   syncForm.hidden = on || !!awaitingCode;
-  codeForm.hidden = on || !!handoff;   // always available: it also takes a transfer code
+  codeForm.hidden = on;                   // takes the emailed code or a transfer code
   $('#cancelCode').hidden = !awaitingCode;
-  handoffBlock.hidden = !handoff;
-  if (handoff) handoffInput.value = handoff;
+  handoffBlock.hidden = !transfer;
+  if (transfer) handoffInput.value = transfer;
   signOutBtn.hidden = !on;
   syncStatus.textContent = syncNote
-    || (handoff ? 'Signed in here. Open Murmur from your home screen, tap ⋯, and paste this code to sign that copy in.' : '')
+    || (sync.handoffCode() ? 'Signed in here. Open Murmur from your home screen, tap ⋯, and paste the code below.' : '')
     || (on ? `Syncing as ${sync.account() ?? 'signed in'}` : 'Sync is off. Your habits stay on this device.');
 }
 
