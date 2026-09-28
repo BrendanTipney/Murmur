@@ -1,6 +1,9 @@
 # Murmur
 A juicy, minimal habit app.
 
+Tap a habit's details to edit it; the sheet also holds a 28-day grid of mini
+hexes for correcting a missed or mis-tapped day. Those toggles save as you tap.
+
 Progress is a running score, not a streak: a kept day adds one, a missed day
 takes one back (floored at zero, capped at 27). Today only ever adds. The lane's
 chemistry follows that score — starved and sparse at the start (dots), fed and

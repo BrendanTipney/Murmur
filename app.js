@@ -4,7 +4,7 @@ import * as sync from './sync.js';
 
 const GOAL = 27;
 const KEY = 'murmur.v1';
-const VERSION = 'v13'; // keep in step with CACHE in sw.js
+const VERSION = 'v14'; // keep in step with CACHE in sw.js
 const $ = (s) => document.querySelector(s);
 
 // ---------- storage ----------
@@ -325,8 +325,47 @@ function closeSheet() {
 }
 scrim.addEventListener('click', closeSheet);
 
+const historyBlock = $('#historyBlock');
+const historyGrid = $('#historyGrid');
+
+/** Four weeks of mini-hexes, so a missed or mis-tapped day can be corrected. */
+function renderHistory(h) {
+  const today = todayKey();
+  const days = [];
+  for (let k = today, i = 0; i < 28; i++, k = prevKey(k)) days.unshift(k);
+  historyGrid.replaceChildren(...days.map((day) => {
+    const b = document.createElement('button');
+    b.type = 'button';
+    const set = (done) => {
+      b.className = `day${done ? ' on' : ''}${day === today ? ' today' : ''}`;
+      b.setAttribute('aria-pressed', String(done));
+      b.setAttribute('aria-label', `${day}, ${done ? 'done' : 'not done'}`);
+    };
+    set(!!h.log[day]?.d);
+    b.innerHTML = `<span class="rim"></span><span class="core"></span><b>${Number(day.slice(8))}</b>`;
+    b.addEventListener('click', () => {
+      const done = !h.log[day]?.d;
+      h.log[day] = { d: done ? 1 : 0, t: Date.now() };
+      save();
+      queueSync();
+      set(done);
+      fx.pop(b);
+      fx.haptic();
+      const e = rows.find((r) => r.h.id === h.id);
+      if (e) {
+        refresh(e);
+        fields.ripple(h.id, done ? 0.7 : -0.6);
+      }
+      updateHeader();
+    });
+    return b;
+  }));
+}
+
 function openEditor(h) {
   editingId = h ? h.id : null;
+  historyBlock.hidden = !h;
+  if (h) renderHistory(h);
   $('#sheetTitle').textContent = h ? 'Edit habit' : 'New habit';
   fName.value = h?.name ?? '';
   fTrig.value = h?.trigger ?? '';

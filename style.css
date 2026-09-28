@@ -281,6 +281,9 @@ button { font: inherit; color: inherit; }
   border: 1px solid var(--line);
   border-bottom: 0;
   border-radius: 22px 22px 0 0;
+  max-height: 92vh;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
   transform: translateY(105%);
   transition: transform .34s cubic-bezier(.2, .9, .25, 1);
 }
@@ -322,6 +325,41 @@ button { font: inherit; color: inherit; }
 }
 .field-row input:focus { border-color: #5a5f70; }
 .field-row input::placeholder { color: #45454c; }
+
+/* 28-day corrector: the same hexagons, shrunk */
+.history {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  gap: 7px 6px;
+  margin: 8px 0 2px;
+}
+.day {
+  position: relative;
+  aspect-ratio: 0.866;
+  border: 0;
+  padding: 0;
+  background: none;
+  cursor: pointer;
+}
+.day > span { position: absolute; clip-path: var(--hexclip); pointer-events: none; }
+.day .rim { inset: 0; background: var(--iri-soft); opacity: 0; transition: opacity .2s; }
+.day .core { inset: 1.5px; background: #17171c; transition: background .2s; }
+.day b {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  font-size: 9.5px;
+  font-weight: 600;
+  color: #64646c;
+  font-variant-numeric: tabular-nums;
+}
+.day.on .rim { opacity: .75; }
+.day.on .core { background: linear-gradient(160deg, #fbfbfc, #cfcfd7); }
+.day.on b { color: #26262b; }
+.day.today .rim { opacity: 1; }
+.day.today b { text-decoration: underline; text-underline-offset: 2px; }
+.day.future { visibility: hidden; }
 
 .actions { display: flex; gap: 10px; margin-top: 18px; }
 .actions .primary { flex: 1; }
