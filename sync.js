@@ -14,6 +14,7 @@ import { SUPABASE } from './config.js';
 const TOKEN_KEY = 'murmur.session';
 let tok = null;
 let handoff = null;
+let hasWindowColumn = true; // cleared if the project predates supabase-migrate-window.sql
 const listeners = [];
 
 const standalone = () =>
@@ -224,6 +225,7 @@ function merge(state, remoteHabits, remoteDays) {
       created: r.created || '',
       updated: r.updated_ms || 0,
     };
+    if (r.window_days) fields.window = r.window_days;
     if (!local) {
       const h = { id: r.id, ...fields, log: {} };
       if (r.deleted_ms) h.deleted = r.deleted_ms;
@@ -272,6 +274,7 @@ export async function sync(state) {
     created: h.created || '',
     deleted_ms: h.deleted || null,
     updated_ms: h.updated || 0,
+    ...(hasWindowColumn ? { window_days: Number(h.window) || null } : {}),
   }));
   const days = [];
   for (const h of state.habits) {
@@ -282,7 +285,18 @@ export async function sync(state) {
 
   const upsert = { headers: { Prefer: 'resolution=merge-duplicates,return=minimal' }, method: 'POST' };
   // Habits first: the day rows reference them.
-  if (habits.length) await api('habits?on_conflict=id', { ...upsert, body: JSON.stringify(habits) });
+  if (habits.length) {
+    try {
+      await api('habits?on_conflict=id', { ...upsert, body: JSON.stringify(habits) });
+    } catch (err) {
+      // The window setting needs a column the project may not have yet; keep
+      // syncing everything else rather than failing outright.
+      if (!hasWindowColumn || !/window_days/.test(String(err.message))) throw err;
+      hasWindowColumn = false;
+      const trimmed = habits.map(({ window_days, ...rest }) => rest);
+      await api('habits?on_conflict=id', { ...upsert, body: JSON.stringify(trimmed) });
+    }
+  }
   if (days.length) await api('habit_days?on_conflict=habit_id,day', { ...upsert, body: JSON.stringify(days) });
   return changed;
 }

@@ -1,13 +1,16 @@
 # Murmur
 A juicy, minimal habit app.
 
-Tap a habit's details to edit it; the sheet also holds a 28-day grid of mini
-hexes for correcting a missed or mis-tapped day. Those toggles save as you tap.
+Tap a habit's details to edit it; the sheet also holds a grid of mini hexes
+covering the window, for correcting a missed or mis-tapped day. Those toggles
+save as you tap.
 
-Progress is a running score, not a streak: a kept day adds one, a missed day
-takes one back (floored at zero, capped at 27). Today only ever adds. The lane's
-chemistry follows that score — starved and sparse at the start (dots), fed and
-dense near the goal — so the pattern itself is the progress bar.
+Progress is how many of the last N days were kept (N defaults to 27, set per
+habit in its editor). A rolling window, not a streak: two days on and two days
+off reads 2, not 0, and a missed day stops counting against you once it falls
+out of the window. The lane's chemistry follows that ratio — starved and sparse
+at the start (dots), fed and dense near the goal — so the pattern is the
+progress bar.
 
 **Live:** https://brendantipney.github.io/Murmur/
 

@@ -4,7 +4,7 @@ import * as sync from './sync.js';
 
 const GOAL = 27;
 const KEY = 'murmur.v1';
-const VERSION = 'v14'; // keep in step with CACHE in sw.js
+const VERSION = 'v15'; // keep in step with CACHE in sw.js
 const $ = (s) => document.querySelector(s);
 
 // ---------- storage ----------
@@ -57,23 +57,19 @@ function nextKey(k) {
   return keyOf(new Date(y, m - 1, d + 1));
 }
 
+/** How many days the rolling window covers for this habit. */
+const windowOf = (h) => Math.max(3, Math.min(365, Number(h.window) || GOAL));
+
 /**
- * Running score rather than a streak: a kept day adds one, a missed day takes
- * one back, floored at zero and capped at the goal. Today only ever adds — it
- * doesn't count against you until it's over.
+ * Progress is how many of the last N days were kept. A missed day doesn't undo
+ * anything: it simply isn't counted, and it stops counting against you once it
+ * falls out of the window.
  */
 function progressOf(h) {
-  const done = doneDays(h);
-  if (!done.length) return 0;
-  const set = new Set(done);
-  const today = todayKey();
-  let k = h.created && h.created <= done[0] ? h.created : done.slice().sort()[0];
-  let n = 0;
-  for (let guard = 0; guard < 4000 && k <= today; guard++, k = nextKey(k)) {
-    if (set.has(k)) n = Math.min(GOAL, n + 1);
-    else if (k !== today) n = Math.max(0, n - 1);
-  }
-  return n;
+  let count = 0;
+  let k = todayKey();
+  for (let i = windowOf(h); i > 0; i--, k = prevKey(k)) if (h.log[k]?.d) count++;
+  return count;
 }
 const doneToday = (h) => !!h.log[todayKey()]?.d;
 
@@ -128,11 +124,11 @@ const FIRST_DAY = 0.16; // day one is cheated forward so it clearly reads as pro
 // The first slice of every lane sits behind the hex, so it never counts as progress.
 const hiddenFor = (fieldW) => Math.min(0.5, (geo.hexW * 0.5 + 6) / fieldW);
 
-function extentFor(s, fieldW) {
+function extentFor(s, fieldW, total) {
   if (s <= 0) return 0;  // nothing kept yet: bare lane
-  if (s >= GOAL) return 1;
+  if (s >= total) return 1;
   const hidden = hiddenFor(fieldW);
-  const t = FIRST_DAY + (1 - FIRST_DAY) * ((s - 1) / (GOAL - 1));
+  const t = FIRST_DAY + (1 - FIRST_DAY) * ((s - 1) / (total - 1));
   return hidden + (1 - hidden) * t;
 }
 
@@ -184,13 +180,14 @@ function makeRow(h, i) {
 
   const e = { h, row, info, hex, cv, fieldW: r.field.w, mirror: !r.left };
   const s = progressOf(h);
+  const total = windowOf(h);
   if (fields.ok) {
     fields.attach(h.id, cv, {
       w: r.field.w, h: geo.fieldH, mirror: !r.left, radius: geo.radius,
       originY: 0.5, // the lane is centred on the hex
       hidden: hiddenFor(r.field.w),
-      extent: extentFor(s, r.field.w),
-      level: s / GOAL,
+      extent: extentFor(s, r.field.w, total),
+      level: s / total,
     });
   } else {
     cv.classList.add('fallback');
@@ -212,7 +209,7 @@ function makeAddRow(i) {
   row.className = 'row';
   const info = makeInfo(r, 'add');
   info.querySelector('.name').textContent = 'New habit';
-  info.querySelector('.goal').textContent = live().length ? '' : `Keep it for ${GOAL} days`;
+  info.querySelector('.goal').textContent = live().length ? '' : `Keep it ${GOAL} days running`;
   const hex = makeHex(r, ADD_HTML, 'Add a habit');
   hex.classList.add('add');
   row.append(info, hex);
@@ -238,15 +235,16 @@ function build() {
 function refresh(e, immediate = false) {
   const { h, hex, cv } = e;
   const s = progressOf(h);
+  const total = windowOf(h);
   const done = doneToday(h);
-  const mastered = s >= GOAL;
+  const mastered = s >= total;
   hex.classList.toggle('done', done);
   hex.classList.toggle('mastered', mastered);
   hex.setAttribute('aria-pressed', String(done));
-  hex.setAttribute('aria-label', `${h.name}: ${done ? 'done today' : 'not done yet today'}, day ${s} of ${GOAL}`);
-  hex.querySelector('.count').innerHTML = `${s}<i>/${GOAL}</i>`;
-  const ext = extentFor(s, e.fieldW);
-  if (fields.ok) fields.setTarget(h.id, ext, s / GOAL, mastered ? 1 : 0, immediate);
+  hex.setAttribute('aria-label', `${h.name}: ${done ? 'done today' : 'not done yet today'}, ${s} of the last ${total} days`);
+  hex.querySelector('.count').innerHTML = `${s}<i>/${total}</i>`;
+  const ext = extentFor(s, e.fieldW, total);
+  if (fields.ok) fields.setTarget(h.id, ext, s / total, mastered ? 1 : 0, immediate);
   else cv.style.setProperty('--ext', ext * 100 + '%');
 }
 
@@ -274,7 +272,7 @@ function onHex(e) {
   fx.haptic();
 
   if (!was) {
-    const mastered = s === GOAL;
+    const mastered = s === windowOf(h);
     fx.pop(hex);
     fx.wave(rows.map((r) => r.hex), rows.indexOf(e));
     fx.burst(x, y, mastered ? { power: 1.8, count: 60 } : {});
@@ -304,7 +302,7 @@ const scrim = $('#scrim');
 const editSheet = $('#editSheet');
 const menuSheet = $('#menuSheet');
 const form = $('#habitForm');
-const fName = $('#fName'), fTrig = $('#fTrig'), fGoal = $('#fGoal');
+const fName = $('#fName'), fTrig = $('#fTrig'), fGoal = $('#fGoal'), fWindow = $('#fWindow');
 const delBtn = $('#delBtn');
 let openEl = null;
 let editingId = null;
@@ -328,11 +326,12 @@ scrim.addEventListener('click', closeSheet);
 const historyBlock = $('#historyBlock');
 const historyGrid = $('#historyGrid');
 
-/** Four weeks of mini-hexes, so a missed or mis-tapped day can be corrected. */
+/** The whole window as mini-hexes, so a missed or mis-tapped day can be corrected. */
 function renderHistory(h) {
   const today = todayKey();
   const days = [];
-  for (let k = today, i = 0; i < 28; i++, k = prevKey(k)) days.unshift(k);
+  for (let k = today, i = windowOf(h); i > 0; i--, k = prevKey(k)) days.unshift(k);
+  $('#historyLabel').textContent = `Last ${days.length} days — tap to correct`;
   historyGrid.replaceChildren(...days.map((day) => {
     const b = document.createElement('button');
     b.type = 'button';
@@ -370,6 +369,7 @@ function openEditor(h) {
   fName.value = h?.name ?? '';
   fTrig.value = h?.trigger ?? '';
   fGoal.value = h?.goal ?? '';
+  fWindow.value = h ? windowOf(h) : GOAL;
   delBtn.hidden = !h;
   disarm();
   openSheet(editSheet);
@@ -380,7 +380,13 @@ form.addEventListener('submit', (ev) => {
   ev.preventDefault();
   const name = fName.value.trim();
   if (!name) { fx.shake(fName); return; }
-  const data = { name, trigger: fTrig.value.trim(), goal: fGoal.value.trim(), updated: Date.now() };
+  const data = {
+    name,
+    trigger: fTrig.value.trim(),
+    goal: fGoal.value.trim(),
+    window: Math.max(3, Math.min(365, Number(fWindow.value) || GOAL)),
+    updated: Date.now(),
+  };
   let newId = null;
   const existing = editingId && state.habits.find((h) => h.id === editingId);
   if (existing) Object.assign(existing, data);

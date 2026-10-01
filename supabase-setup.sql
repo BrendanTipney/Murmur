@@ -12,6 +12,7 @@ create table if not exists habits (
   trigger text default '',
   goal text default '',
   created text default '',
+  window_days int,                       -- days the rolling progress counts over
   deleted_ms bigint,                     -- tombstone, so deletes travel between devices
   updated_ms bigint not null default 0,
   inserted_at timestamptz default now()
