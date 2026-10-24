@@ -6,7 +6,9 @@ covering the window, for correcting a missed or mis-tapped day. Those toggles
 save as you tap.
 
 Progress is how many of the last N days were kept (N defaults to 27, set per
-habit in its editor). A rolling window, not a streak: two days on and two days
+habit in its editor). The goal is how many of those N days you need, and
+defaults to all of them: a habit you want three times in 27 days has a window
+of 27 and needs 3, so it reads 2/3, then 3/3 and full. A rolling window, not a streak: two days on and two days
 off reads 2, not 0, and a missed day stops counting against you once it falls
 out of the window. The lane's chemistry follows that ratio — starved and sparse
 at the start (dots), fed and dense near the goal — so the pattern is the

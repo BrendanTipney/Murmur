@@ -4,7 +4,7 @@ import * as sync from './sync.js';
 
 const GOAL = 27;
 const KEY = 'murmur.v1';
-const VERSION = 'v15'; // keep in step with CACHE in sw.js
+const VERSION = 'v16'; // keep in step with CACHE in sw.js
 const $ = (s) => document.querySelector(s);
 
 // ---------- storage ----------
@@ -59,6 +59,12 @@ function nextKey(k) {
 
 /** How many days the rolling window covers for this habit. */
 const windowOf = (h) => Math.max(3, Math.min(365, Number(h.window) || GOAL));
+
+/** How many kept days in that window count as hitting the goal (all of them by default). */
+const targetOf = (h) => {
+  const w = windowOf(h);
+  return Math.max(1, Math.min(w, Number(h.target) || w));
+};
 
 /**
  * Progress is how many of the last N days were kept. A missed day doesn't undo
@@ -180,14 +186,14 @@ function makeRow(h, i) {
 
   const e = { h, row, info, hex, cv, fieldW: r.field.w, mirror: !r.left };
   const s = progressOf(h);
-  const total = windowOf(h);
+  const total = targetOf(h);
   if (fields.ok) {
     fields.attach(h.id, cv, {
       w: r.field.w, h: geo.fieldH, mirror: !r.left, radius: geo.radius,
       originY: 0.5, // the lane is centred on the hex
       hidden: hiddenFor(r.field.w),
       extent: extentFor(s, r.field.w, total),
-      level: s / total,
+      level: Math.min(1, s / total),
     });
   } else {
     cv.classList.add('fallback');
@@ -235,16 +241,17 @@ function build() {
 function refresh(e, immediate = false) {
   const { h, hex, cv } = e;
   const s = progressOf(h);
-  const total = windowOf(h);
+  const total = targetOf(h);
+  const span = windowOf(h);
   const done = doneToday(h);
   const mastered = s >= total;
   hex.classList.toggle('done', done);
   hex.classList.toggle('mastered', mastered);
   hex.setAttribute('aria-pressed', String(done));
-  hex.setAttribute('aria-label', `${h.name}: ${done ? 'done today' : 'not done yet today'}, ${s} of the last ${total} days`);
+  hex.setAttribute('aria-label', `${h.name}: ${done ? 'done today' : 'not done yet today'}, ${s} of the last ${span} days, goal ${total}`);
   hex.querySelector('.count').innerHTML = `${s}<i>/${total}</i>`;
   const ext = extentFor(s, e.fieldW, total);
-  if (fields.ok) fields.setTarget(h.id, ext, s / total, mastered ? 1 : 0, immediate);
+  if (fields.ok) fields.setTarget(h.id, ext, Math.min(1, s / total), mastered ? 1 : 0, immediate);
   else cv.style.setProperty('--ext', ext * 100 + '%');
 }
 
@@ -272,7 +279,7 @@ function onHex(e) {
   fx.haptic();
 
   if (!was) {
-    const mastered = s === windowOf(h);
+    const mastered = s === targetOf(h);
     fx.pop(hex);
     fx.wave(rows.map((r) => r.hex), rows.indexOf(e));
     fx.burst(x, y, mastered ? { power: 1.8, count: 60 } : {});
@@ -302,7 +309,7 @@ const scrim = $('#scrim');
 const editSheet = $('#editSheet');
 const menuSheet = $('#menuSheet');
 const form = $('#habitForm');
-const fName = $('#fName'), fTrig = $('#fTrig'), fGoal = $('#fGoal'), fWindow = $('#fWindow');
+const fName = $('#fName'), fTrig = $('#fTrig'), fGoal = $('#fGoal'), fWindow = $('#fWindow'), fTarget = $('#fTarget');
 const delBtn = $('#delBtn');
 let openEl = null;
 let editingId = null;
@@ -370,21 +377,33 @@ function openEditor(h) {
   fTrig.value = h?.trigger ?? '';
   fGoal.value = h?.goal ?? '';
   fWindow.value = h ? windowOf(h) : GOAL;
+  fTarget.value = h ? targetOf(h) : GOAL;
   delBtn.hidden = !h;
   disarm();
   openSheet(editSheet);
   if (!h) fName.focus({ preventScroll: true });
 }
 
+// "Every day" is the default, so while the target matches the window it follows it.
+let lastWindow = '';
+fWindow.addEventListener('focus', () => { lastWindow = fWindow.value; });
+fWindow.addEventListener('input', () => {
+  if (fTarget.value === lastWindow) fTarget.value = fWindow.value;
+  lastWindow = fWindow.value;
+});
+
 form.addEventListener('submit', (ev) => {
   ev.preventDefault();
   const name = fName.value.trim();
   if (!name) { fx.shake(fName); return; }
+  const win = Math.max(3, Math.min(365, Number(fWindow.value) || GOAL));
   const data = {
     name,
     trigger: fTrig.value.trim(),
     goal: fGoal.value.trim(),
-    window: Math.max(3, Math.min(365, Number(fWindow.value) || GOAL)),
+    window: win,
+    // Blank, or more than the window, means every day counts.
+    target: Math.max(1, Math.min(win, Number(fTarget.value) || win)),
     updated: Date.now(),
   };
   let newId = null;
